@@ -30,7 +30,7 @@ flowchart LR
     web --> core
     web -. "Fase 2" .-> voice
 
-    web == "HTTP REST" ==> server
+    web == "HTTP REST e WebSocket" ==> server
     server == "sqlx" ==> pg
     voice -. "WebRTC (Fase 2)" .-> lk
 
@@ -44,7 +44,7 @@ execução e as tracejadas ainda não existem.
 | Crate | Depende de | O que tem hoje |
 | --- | --- | --- |
 | `proto` | `serde`, `uuid`, `chrono` | Health, auth, servidores, canais e mensagens (DTOs e validação), erros, IDs tipados e envelope WS |
-| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, servidores, canais, convites e mensagens, CORS e migrations |
+| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, servidores, canais, convites e mensagens, WebSocket (`/ws`), CORS e migrations |
 | `api-client` | `proto`, `reqwest` | `ApiClient::health()` |
 | `call-core` | `proto` | `ApiStatus` |
 | `voice` | `wasm-bindgen` | Vazio (Fase 2) |

@@ -12,49 +12,7 @@
 param([string]$Api = "http://127.0.0.1:3000")
 
 $ErrorActionPreference = "Stop"
-$script:falhas = 0
-
-# Chama a API e devolve @{ Status; Body }. Não lança exceção em 4xx/5xx.
-# O corpo vai e volta em UTF-8 (o PowerShell 5.1 erra os acentos se deixar por conta dele).
-function Invoke-Api([string]$Method, [string]$Path, $Body = $null, [string]$Token = $null) {
-    $req = [System.Net.HttpWebRequest]::Create("$Api$Path")
-    $req.Method = $Method
-    if ($Token) { $req.Headers.Add("Authorization", "Bearer $Token") }
-    if ($null -ne $Body) {
-        $bytes = [System.Text.Encoding]::UTF8.GetBytes(($Body | ConvertTo-Json -Compress -Depth 5))
-        $req.ContentType = "application/json; charset=utf-8"
-        $stream = $req.GetRequestStream()
-        $stream.Write($bytes, 0, $bytes.Length)
-        $stream.Close()
-    }
-    try { $res = $req.GetResponse() } catch [System.Net.WebException] {
-        $res = $_.Exception.Response
-        if ($null -eq $res) { throw "API fora do ar em $Api. Rode: cargo run -p call-server" }
-    }
-    $reader = New-Object System.IO.StreamReader($res.GetResponseStream(), [System.Text.Encoding]::UTF8)
-    $text = $reader.ReadToEnd()
-    $reader.Close()
-    $status = [int]$res.StatusCode
-    $res.Close()
-    $parsed = $null
-    if ($text) { try { $parsed = $text | ConvertFrom-Json } catch { $parsed = $text } }
-    return @{ Status = $status; Body = $parsed }
-}
-
-function Test-Step([string]$Name, [bool]$Ok, [string]$Detail = "") {
-    if ($Ok) {
-        Write-Host "  OK      $Name" -ForegroundColor Green
-    } else {
-        $script:falhas++
-        Write-Host "  FALHOU  $Name $Detail" -ForegroundColor Red
-    }
-}
-
-function New-User([string]$Name) {
-    $r = Invoke-Api POST "/auth/register" @{ username = $Name; display_name = $Name; password = "senha-forte-1" }
-    Test-Step "cadastra $Name" ($r.Status -eq 201) "(status $($r.Status))"
-    return $r.Body.access_token
-}
+. "$PSScriptRoot\comum.ps1"
 
 $sufixo = Get-Random -Maximum 99999
 Write-Host "API: $Api   (sufixo dos usuários: $sufixo)`n"

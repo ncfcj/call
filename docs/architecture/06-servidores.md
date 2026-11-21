@@ -25,8 +25,8 @@ Implementado no servidor na Fase 1. O client ainda não usa. Todas as rotas exig
 Quem não é membro recebe **404**, e não 403, para não revelar que o servidor ou o canal existe.
 Um membro que tenta uma ação de dono recebe **403** com `code: "forbidden"`.
 
-O envio de mensagens é por REST. O WebSocket vai só distribuir aos inscritos o
-`MESSAGE_CREATE` de cada mensagem gravada.
+O envio de mensagens é por REST. Depois de gravar, o servidor distribui o `MESSAGE_CREATE`
+pelo WebSocket a quem está inscrito no servidor ([07-websocket.md](07-websocket.md)).
 
 ## Paginação do histórico
 
@@ -94,7 +94,8 @@ classDiagram
 ```
 
 O módulo `access` é a única porta de permissão: os handlers não escrevem a checagem de membro
-à mão. O `SUBSCRIBE` do WebSocket e o token de voz da Fase 2 vão usar o mesmo `channel_member`.
+à mão. O `SUBSCRIBE` e o `TYPING_START` do WebSocket já usam o mesmo módulo, e o token de voz da
+Fase 2 vai usar também.
 
 ## Tipos do contrato (`proto`)
 

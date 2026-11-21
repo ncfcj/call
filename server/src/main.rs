@@ -29,7 +29,8 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await.context("falha ao aplicar migrations")?;
 
-    let state = AppState::new(db, &config.jwt_secret, config.cookie_secure);
+    let state =
+        AppState::new(db, &config.jwt_secret, config.cookie_secure, config.web_origins.clone());
     let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr)

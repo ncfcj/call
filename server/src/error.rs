@@ -31,6 +31,11 @@ impl From<sqlx::Error> for AppError {
 }
 
 impl AppError {
+    /// Código do erro, para respostas HTTP e eventos `ERROR` do WebSocket.
+    pub fn code(&self) -> ErrorCode {
+        self.status_and_code().1
+    }
+
     fn status_and_code(&self) -> (StatusCode, ErrorCode) {
         match self {
             Self::Validation(_) => (StatusCode::UNPROCESSABLE_ENTITY, ErrorCode::Validation),

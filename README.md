@@ -73,6 +73,7 @@ powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
 | Script | Etapa |
 | --- | --- |
 | `teste-servidores.ps1` | Servidores, canais, convite, permissões de dono e histórico de mensagens |
+| `teste-websocket.ps1` | Ticket, heartbeat, inscrição, presença, digitação e mensagem em tempo real com três conexões |
 
 Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
 
@@ -92,10 +93,12 @@ Os dados criados ficam no banco local, e o script mostra no fim o login de um us
 | `POST /invites/{code}` | Bearer | Entra no servidor pelo código de convite |
 | `GET/POST /guilds/{id}/channels`, `PATCH/DELETE /channels/{id}` | Bearer | Canais de texto e voz (mudanças só para o dono) |
 | `GET/POST /channels/{id}/messages` | Bearer | Histórico paginado (`before`, `after`, `limit`) e envio de mensagem |
+| `POST /ws/ticket` | Bearer | Ticket de uso único (30 s) para abrir o WebSocket |
+| `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat |
 
 O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
 `Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.
 Erros respondem `{"code": "...", "message": "..."}`, com os códigos de `proto::ErrorCode`.
 Quem não é membro de um servidor recebe 404 nas rotas dele. Os detalhes estão em
-`docs/architecture/06-servidores.md`.
+`docs/architecture/06-servidores.md` e `docs/architecture/07-websocket.md`.
 

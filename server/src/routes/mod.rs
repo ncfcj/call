@@ -10,7 +10,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 
-use crate::state::AppState;
+use crate::{state::AppState, ws};
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -29,5 +29,7 @@ pub fn router(state: AppState) -> Router {
         .route("/invites/{code}", post(guilds::join))
         .route("/channels/{id}", patch(channels::update).delete(channels::delete))
         .route("/channels/{id}/messages", get(messages::list).post(messages::create))
+        .route("/ws/ticket", post(ws::ticket))
+        .route("/ws", get(ws::upgrade))
         .with_state(state)
 }

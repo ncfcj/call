@@ -176,6 +176,7 @@ pub async fn delete(
 ) -> AppResult<StatusCode> {
     guild_member(&state.db, id, user).await?.require_owner()?;
     sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id.0).execute(&state.db).await?;
+    state.hub.remove_guild(id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -229,6 +230,7 @@ pub async fn leave(
         .bind(user.0)
         .execute(&state.db)
         .await?;
+    state.hub.remove_member(id, user);
     Ok(StatusCode::NO_CONTENT)
 }
 

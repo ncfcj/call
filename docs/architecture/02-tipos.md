@@ -20,12 +20,19 @@ classDiagram
 
     class ServerEvent {
         <<enumeration>>
-        Hello(heartbeat_interval_ms u64)
+        Hello(heartbeat_interval_ms, user_id)
         HeartbeatAck
+        Subscribed(guild_id, online)
+        MessageCreate(Message)
+        TypingStart(guild_id, channel_id, user_id)
+        PresenceUpdate(guild_id, user_id, status)
+        Error(code, message)
     }
     class ClientEvent {
         <<enumeration>>
         Heartbeat
+        Subscribe(guild_id)
+        TypingStart(channel_id)
     }
 
     class UserId {
@@ -42,8 +49,8 @@ classDiagram
     }
 ```
 
-- **`ServerEvent` e `ClientEvent`** são serializados como `{"t": "HELLO", "d": {...}}`, com
-  testes em `crates/proto/src/ws.rs`. O servidor ainda não tem handler de WebSocket que os use.
+- **`ServerEvent` e `ClientEvent`** são serializados como `{"t": "HELLO", "d": {...}}`. Quando cada um
+  é enviado está em [07-websocket.md](07-websocket.md).
 - **IDs tipados** (`UserId`, `GuildId`, `ChannelId`, `MessageId`) saem da macro `id_type!`: cada
   um embrulha um `Uuid` com `From<Uuid>`, `Display` e `serde(transparent)`. Assim o compilador
   impede passar um `ChannelId` onde se espera um `UserId`.

@@ -5,7 +5,8 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use proto::{
-    ChannelId, ChannelKind, CreateMessageRequest, Message, MessageId, MessagesQuery, User, UserId,
+    ChannelId, ChannelKind, CreateMessageRequest, Message, MessageId, MessagesQuery, ServerEvent,
+    User, UserId,
     message::{MESSAGES_PAGE_DEFAULT, MESSAGES_PAGE_MAX, validate_message_content},
 };
 use uuid::Uuid;
@@ -115,15 +116,16 @@ pub async fn list(
     Ok(Json(rows.into_iter().map(Message::from).collect()))
 }
 
-/// `POST /channels/{id}/messages`: grava a mensagem. O envio aos inscritos pelo WebSocket
-/// entra junto com o WS.
+/// `POST /channels/{id}/messages`: grava a mensagem e depois a envia, como `MESSAGE_CREATE`,
+/// a quem está inscrito no servidor pelo WebSocket. Gravar antes garante que um client que
+/// reconecta acha no histórico tudo o que já foi difundido.
 pub async fn create(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
     Path(channel): Path<ChannelId>,
     Json(req): Json<CreateMessageRequest>,
 ) -> AppResult<(StatusCode, Json<Message>)> {
-    text_channel(&state, channel, user).await?;
+    let access = text_channel(&state, channel, user).await?;
     validate_message_content(&req.content).map_err(AppError::Validation)?;
 
     let row: MessageRow = sqlx::query_as(
@@ -141,5 +143,7 @@ pub async fn create(
     .bind(&req.content)
     .fetch_one(&state.db)
     .await?;
-    Ok((StatusCode::CREATED, Json(row.into())))
+    let message = Message::from(row);
+    state.hub.publish(access.guild.guild_id, &ServerEvent::MessageCreate(message.clone()), None);
+    Ok((StatusCode::CREATED, Json(message)))
 }
