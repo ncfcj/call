@@ -1,7 +1,3 @@
-mod config;
-mod routes;
-mod state;
-
 use std::time::Duration;
 
 use anyhow::Context;
@@ -9,7 +5,7 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-use crate::{config::Config, state::AppState};
+use call_server::{config::Config, routes, state::AppState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -33,9 +29,8 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await.context("falha ao aplicar migrations")?;
 
-    let app = routes::router(AppState { db })
-        .layer(config.cors_layer())
-        .layer(TraceLayer::new_for_http());
+    let state = AppState::new(db, &config.jwt_secret, config.cookie_secure);
+    let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(config.bind_addr)
         .await

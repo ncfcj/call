@@ -10,6 +10,10 @@ pub struct Config {
     pub database_url: String,
     pub bind_addr: SocketAddr,
     pub web_origins: Vec<HeaderValue>,
+    /// Segredo HS256 dos access tokens. Pelo menos 32 bytes.
+    pub jwt_secret: String,
+    /// `Secure` no cookie de refresh. Só desligue em desenvolvimento sem HTTPS.
+    pub cookie_secure: bool,
 }
 
 impl Config {
@@ -32,11 +36,22 @@ impl Config {
             bail!("WEB_ORIGIN precisa de pelo menos uma origem");
         }
 
-        Ok(Self { database_url, bind_addr, web_origins })
+        let jwt_secret = std::env::var("JWT_SECRET").context("defina JWT_SECRET")?;
+        if jwt_secret.len() < 32 {
+            bail!("JWT_SECRET precisa ter pelo menos 32 caracteres");
+        }
+
+        let cookie_secure = match std::env::var("COOKIE_SECURE").as_deref() {
+            Err(_) | Ok("true") => true,
+            Ok("false") => false,
+            Ok(other) => bail!("COOKIE_SECURE deve ser true ou false, não {other:?}"),
+        };
+
+        Ok(Self { database_url, bind_addr, web_origins, jwt_secret, cookie_secure })
     }
 
     /// CORS restrito às origens do client. Lembrete: CORS não protege WebSocket;
-    /// o handler de WS da Fase 1 valida o header `Origin` por conta própria.
+    /// o handler de WS valida o header `Origin` por conta própria.
     pub fn cors_layer(&self) -> CorsLayer {
         CorsLayer::new()
             .allow_origin(AllowOrigin::list(self.web_origins.clone()))

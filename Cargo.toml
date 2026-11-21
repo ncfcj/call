@@ -34,6 +34,12 @@ leptos = { version = "0.8", features = ["csr"] }
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 wasm-bindgen = "0.2"
 
+# Argon2 sem otimização leva segundos por hash; otimiza só ele no perfil de dev.
+[profile.dev.package.argon2]
+opt-level = 3
+[profile.dev.package.blake2]
+opt-level = 3
+
 # O release padrão é otimizado para o servidor (velocidade).
 # O client usa o perfil `wasm-release` (tamanho), selecionado em web/index.html.
 [profile.wasm-release]

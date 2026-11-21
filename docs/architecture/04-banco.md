@@ -1,7 +1,8 @@
 # Banco de dados
 
-Este é o esquema da migration `migrations/20261121000000_init.sql`. As tabelas já são criadas na
-subida do servidor, mas nenhum código as usa ainda: elas entram na Fase 1. Os IDs são UUIDv7
+Este é o esquema das migrations em `migrations/`, aplicadas na subida do servidor. Hoje o código
+usa `users` e `refresh_tokens` (autenticação); as outras tabelas entram nas próximas partes da
+Fase 1. Os IDs são UUIDv7
 gerados pela aplicação e correspondem aos tipos `UserId`, `GuildId`, `ChannelId` e `MessageId`
 do `proto`.
 
@@ -13,6 +14,7 @@ erDiagram
     guilds ||--o{ channels : "tem (CASCADE)"
     channels ||--o{ messages : "tem (CASCADE)"
     users |o--o{ messages : "escreve (SET NULL)"
+    users ||--o{ refresh_tokens : "tem (CASCADE)"
 
     users {
         UUID id PK
@@ -41,6 +43,16 @@ erDiagram
         INT position
         TIMESTAMPTZ created_at
     }
+    refresh_tokens {
+        UUID id PK
+        UUID user_id FK
+        UUID family_id "uma família por login"
+        BYTEA token_hash UK "SHA-256 do token"
+        TIMESTAMPTZ expires_at "30 dias"
+        TIMESTAMPTZ used_at "preenchido na rotação"
+        TIMESTAMPTZ revoked_at "logout ou reuso"
+        TIMESTAMPTZ created_at
+    }
     messages {
         UUID id PK
         UUID channel_id FK
@@ -57,6 +69,8 @@ erDiagram
 | --- | --- |
 | `guild_members_user_idx (user_id)` | Listar os servidores de um usuário |
 | `channels_guild_idx (guild_id, position)` | Listar os canais de um servidor em ordem |
+| `refresh_tokens_family_idx (family_id)` | Revogar a família inteira no logout ou no reuso |
+| `refresh_tokens_user_idx (user_id)` | Sessões de um usuário |
 | `messages_channel_idx (channel_id, id DESC)` | Paginação `?before=<id>` do histórico. Funciona porque o UUIDv7 é ordenável por tempo |
 
 ## Observações
@@ -65,4 +79,4 @@ erDiagram
   usuário mantém as mensagens dele, com `author_id` nulo.
 - Apagar o usuário dono de um servidor falha, porque `guilds.owner_id` não tem `ON DELETE`.
   Defina o comportamento na Fase 1 (transferir o servidor ou bloquear a exclusão).
-- Ainda não há tabela para o refresh token rotativo da Fase 1. Ela precisa de uma migration nova.
+- O fluxo dos refresh tokens está em [05-auth.md](05-auth.md).
