@@ -119,23 +119,34 @@ Quatro fases curtas, cada uma com um critério de aceite testável em dois naveg
 
 ### Fase 0: fundação (1 a 2 dias)
 
-- [ ] Monorepo num workspace Cargo, com os crates compartilhados proto, api-client e core, o servidor em `server/` e o client Leptos (Trunk) em `web/`
-- [ ] `docker compose` local com Postgres e `livekit-server --dev`, para não gastar cota em desenvolvimento
-- [ ] Migrations `sqlx` iniciais: `users`, `guilds`, `guild_members`, `channels` (kind: text | voice), `messages`
-- [ ] CI com `cargo clippy`, `cargo test` e build do front
+- [x] Monorepo num workspace Cargo, com os crates compartilhados proto, api-client e core, o servidor em `server/` e o client Leptos (Trunk) em `web/`
+- [x] `docker compose` local com Postgres e `livekit-server --dev`, para não gastar cota em desenvolvimento
+- [x] Migrations `sqlx` iniciais: `users`, `guilds`, `guild_members`, `channels` (kind: text | voice), `messages`
+- [x] CI com `cargo clippy`, `cargo test` e build do front
 
 Pronto quando: `GET /health` responde e o front carrega apontando para a API local.
 
+**Situação: concluída** (commit `4b5ef9c`, na `main`).
+
 ### Fase 1: autenticação, servidores e chat de texto (1 a 2 semanas)
 
-- [ ] `POST /auth/register`, `/auth/login` e `/auth/refresh`: Argon2, JWT de acesso de 15 min, refresh rotativo em cookie `HttpOnly`
-- [ ] CRUD mínimo de servidores (*guilds*) e canais, mais convite por código
-- [ ] `GET /channels/:id/messages?before=<id>&limit=50` para o histórico paginado
-- [ ] `POST /ws/ticket` gera um ticket de uso único (30 s). `GET /ws?ticket=...` faz o upgrade
-- [ ] Protocolo de eventos: `HELLO`, `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat a cada 30 s
-- [ ] Client: lista de servidores e canais, chat e reconexão com *backoff* exponencial que recarrega o que perdeu desde o último id
+- [x] `POST /auth/register`, `/auth/login` e `/auth/refresh`: Argon2, JWT de acesso de 15 min, refresh rotativo em cookie `HttpOnly`. Também `POST /auth/logout` e `GET /users/@me`
+- [x] CRUD mínimo de servidores (*guilds*) e canais, mais convite por código. Mudanças só para o dono; quem não é membro recebe 404
+- [x] `GET /channels/:id/messages?before=<id>&limit=50` para o histórico paginado. Ganhou também `after=<id>`, usado para recuperar o que se perdeu ao reconectar
+- [x] `POST /ws/ticket` gera um ticket de uso único (30 s). `GET /ws?ticket=...` faz o upgrade
+- [x] Protocolo de eventos: `HELLO`, `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat a cada 30 s. Mais `SUBSCRIBED` e `ERROR`
+- [x] Client: lista de servidores e canais, chat e reconexão com *backoff* exponencial que recarrega o que perdeu desde o último id
 
 Pronto quando: dois usuários em navegadores diferentes trocam mensagens em tempo real. Um usuário fora do servidor não recebe eventos do canal. Reiniciar o backend não perde mensagens.
+
+**Situação: implementada, em validação.** Branch `fase-1`, PR #3 (rascunho; a autenticação já entrou na `main` pelo PR #1). Os três critérios têm testes de integração e foram conferidos no navegador, com um robô do outro lado da conversa (`scripts/teste-client.ps1`). Falta a sua validação no navegador antes de mergear.
+
+| Etapa | Commit | Teste funcional |
+| --- | --- | --- |
+| Autenticação | `e05b55a` | `server/tests/auth.rs` |
+| Servidores, canais, convites e histórico | `50b0e6c` | `scripts/teste-servidores.ps1` |
+| WebSocket | `27eaad2` | `scripts/teste-websocket.ps1` |
+| Client Leptos | `121c8e2` | `scripts/teste-client.ps1 -Convite <código>` |
 
 ### Fase 2: voz com WebRTC (1 a 2 semanas)
 
@@ -157,6 +168,32 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 - [ ] Build Tauri para Windows (instalador MSI ou NSIS) com o mesmo client Leptos. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
 
 Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o consumo do mês dentro das cotas gratuitas.
+
+## Decisões tomadas na implementação
+
+O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs/architecture/`.
+
+| Assunto | Plano | Implementado | Motivo |
+| --- | --- | --- | --- |
+| Queries do `sqlx` | Checadas em compilação | Checadas em runtime, cobertas por testes de integração com Postgres | A checagem em compilação exige o banco ligado ou um cache offline em todo build |
+| Fan-out do chat | Um `broadcast` por canal de texto | Inscrição por servidor (`SUBSCRIBE {guild_id}`), com uma fila por conexão num `Hub` em memória | Quem sai do servidor para de receber na hora, e canais novos entram sem se reinscrever. Continua sendo instância única |
+| Envio de mensagens | Não definido | `POST /channels/{id}/messages`; o WebSocket só difunde o `MESSAGE_CREATE` depois de gravar | Quem reconecta acha no histórico tudo o que já foi difundido |
+| Presença | Por usuário | Por servidor: online enquanto houver uma conexão inscrita nele | Cada servidor mostra só os próprios membros |
+| Conexão lenta | Não definido | Fila de 256 eventos; cheia, a conexão é desligada e o client reconecta | Um client travado não segura a memória do servidor |
+| Servidor novo | Não definido | Já nasce com os canais `geral` (texto) e `Geral` (voz) | Dá para conversar logo depois de criar |
+| Dono do servidor | Não definido | Não pode sair; para isso, apaga o servidor. Sem transferência de dono | Mantém o MVP simples |
+| Rust mínimo | 1.85 | 1.88 | O Leptos 0.8.23 exige 1.88. Com 1.85, ele ficava preso na 0.8.3, que avisava de código a ser recusado pelo Rust |
+| Endereço local | `127.0.0.1` | `BIND_ADDR` aceita vários endereços; o padrão escuta em `127.0.0.1` e `[::1]`, e `WEB_ORIGIN` inclui `http://[::1]:8080` | O `localhost` resolve primeiro para `::1`, e o Firefox não tenta o IPv4 depois |
+| URL da API no client | Fixa no build | Mesmo host da página, na porta 3000 (ou `CALL_API_URL` no build) | O navegador trata `localhost` e `127.0.0.1` como sites diferentes e não manda o cookie de refresh |
+
+Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, com um commit e um script de teste funcional em `scripts/` por etapa.
+
+### Pendências conhecidas
+
+- **Cookie no deploy (Fase 3):** o refresh usa `SameSite=Lax` e funciona com o client e a API no mesmo site. Com o Cloudflare Pages e a VM em domínios diferentes, vai precisar de `SameSite=None` ou de um subdomínio em comum.
+- **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
+- **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
+- **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
 
 ## Riscos técnicos e mitigação
 
