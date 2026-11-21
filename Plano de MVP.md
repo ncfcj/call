@@ -169,6 +169,30 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 
 Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o consumo do mês dentro das cotas gratuitas.
 
+### Fase 4: segurança dos dados (pós-MVP, data a definir)
+
+Hoje o texto das mensagens fica puro no Postgres, protegido só pelo TLS da conexão e pela criptografia de disco do provedor. O áudio já trafega cifrado (DTLS-SRTP do WebRTC) entre o client e o SFU, mas o SFU decifra cada pacote para encaminhar. Esta fase decide até onde ir, em dois níveis:
+
+| Nível | Texto | Áudio | Quem consegue ler | Custo |
+| --- | --- | --- | --- | --- |
+| **A. Cifrado em repouso** | O servidor cifra o `content` antes de gravar (AES-256-GCM), com uma chave por servidor (guild) guardada fora do banco | Já atendido pelo DTLS-SRTP no transporte; não há gravação de áudio | O servidor, mas não quem só tiver acesso ao banco ou a um backup | Baixo: muda a coluna para `BYTEA` e o caminho de gravar e ler |
+| **B. Ponta a ponta (E2EE)** | O client cifra antes de enviar; o servidor só guarda e repassa o texto cifrado. Chaves de grupo por servidor, com MLS (`openmls`) | E2EE do LiveKit (SFrame via Insertable Streams), com a chave distribuída pelo mesmo grupo MLS | Só os membros | Alto: gestão de chaves no client, entrada e saída de membros, histórico para quem entra depois |
+
+- [ ] Decidir o nível (A, B ou A agora e B depois) e o modelo de ameaça: vazamento do banco, operador do servidor, provedor do SFU
+- [ ] Texto, nível A: coluna `content` em `BYTEA` com nonce, chave por servidor derivada de uma chave mestra fora do banco (variável de ambiente ou KMS), migração das mensagens existentes e rotação de chave
+- [ ] Texto, nível B: chaves no client (WebCrypto ou `openmls` em WASM), convite que entrega a chave do grupo, troca de chave quando alguém sai, e o que acontece com o histórico de quem entra depois
+- [ ] Áudio, nível B: ativar o E2EE do `livekit-client` na ponte do crate `voice` e conferir o suporte no Firefox, no Chrome e no WebView2 do Tauri
+- [ ] Revisar o que continua visível mesmo com E2EE: quem fala com quem e quando, nomes de servidores e canais, presença
+
+Impactos a considerar antes de escolher:
+
+- **Limite de 4000 caracteres:** com texto cifrado, o `CHECK` do banco passa a valer sobre o tamanho cifrado, e a validação do conteúdo fica só no client (nível B).
+- **Busca e moderação:** com o nível B o servidor não lê as mensagens, então busca no servidor, filtros e denúncia com conteúdo ficam impossíveis ou precisam rodar no client.
+- **Perda de chave:** no nível B, quem perder todas as sessões perde o histórico, a menos que exista um backup de chave.
+- **Desempenho:** o nível A acrescenta microssegundos por mensagem. O E2EE de áudio cifra cada quadro no client e aumenta o uso de CPU em chamadas grandes.
+
+Pronto quando: o nível escolhido está implementado, um dump do banco não revela o texto das mensagens, e (no nível B) o SFU encaminha áudio que ele mesmo não consegue decifrar.
+
 ## Decisões tomadas na implementação
 
 O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs/architecture/`.
@@ -194,6 +218,7 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
+- **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
 
 ## Riscos técnicos e mitigação
 
