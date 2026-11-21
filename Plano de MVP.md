@@ -165,9 +165,30 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 - [ ] Front no Cloudflare Pages, com CORS restrito ao domínio dele
 - [ ] Rate limit em login e envio de mensagens. Tamanho máximo de mensagem
 - [ ] Logs estruturados com `tracing` e um painel simples de uso das cotas (minutos do LiveKit, armazenamento do Neon)
+- [ ] Retenção de mensagens de texto (TTL), para guardar o mínimo necessário. Detalhes abaixo
 - [ ] Build Tauri para Windows (instalador MSI ou NSIS) com o mesmo client Leptos. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
 
 Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o consumo do mês dentro das cotas gratuitas.
+
+#### Retenção de mensagens (TTL)
+
+Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento para de crescer com o tempo de uso. Hoje toda mensagem fica para sempre. Uma mensagem curta ocupa de 150 a 300 bytes com o índice, e o Neon Free tem 1 GB.
+
+Decisões a tomar:
+
+- [ ] **Prazo padrão.** Sugestão: 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
+- [ ] **Quem escolhe.** Um prazo global no servidor (`MESSAGE_TTL_DAYS`) ou um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
+- [ ] **Limite por quantidade.** Opcional: manter no máximo N mensagens por canal, além do prazo
+
+Implementação prevista:
+
+- **Expurgo periódico:** uma tarefa no próprio `call-server` (um `tokio::time::interval`, por exemplo a cada hora) apaga em lotes as mensagens vencidas. Como o id é UUIDv7, o tempo está no próprio id: dá para apagar com `WHERE id < <UUIDv7 do instante de corte>` usando o índice que já existe.
+- **Espaço de volta no disco:** no Postgres, um `DELETE` não devolve espaço na hora; o `VACUUM` só reaproveita o espaço. Se o volume crescer, particionar `messages` por mês e apagar a partição inteira (`DROP TABLE`), que devolve o espaço na hora e não gera trabalho de `VACUUM`.
+- **Client:** o histórico termina no limite do prazo. A tela avisa algo como "mensagens com mais de 30 dias são apagadas", e o `has_older` do `MessageLog` fica falso ao chegar lá.
+- **Reconexão:** um client que ficar offline por mais tempo que o prazo simplesmente não recupera o que venceu. O `?after=<id>` continua funcionando.
+- **Medição:** o painel de cotas mostra o tamanho da tabela (`pg_total_relation_size('messages')`) e quantas mensagens o expurgo apagou.
+
+Pronto quando: mensagens mais velhas que o prazo somem sozinhas, o tamanho de `messages` se estabiliza com o uso contínuo, e o client deixa claro até onde vai o histórico.
 
 ### Fase 4: segurança dos dados (pós-MVP, data a definir)
 
@@ -218,6 +239,7 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
+- **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
 
 ## Riscos técnicos e mitigação
