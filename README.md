@@ -57,3 +57,22 @@ cargo clippy -p proto -p call-server --all-targets -- -D warnings
 cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
 cargo test -p proto -p call-server
 ```
+
+Os testes de integração do servidor (`server/tests/`) precisam do Postgres do `docker compose`
+ligado e de `DATABASE_URL` no ambiente: cada teste cria e apaga um banco próprio.
+
+## API
+
+| Rota | Auth | O que faz |
+| --- | --- | --- |
+| `GET /health` | | Status da API e do banco |
+| `POST /auth/register` | | Cria a conta e abre a sessão (201) |
+| `POST /auth/login` | | Abre a sessão |
+| `POST /auth/refresh` | cookie | Troca o refresh token (rotação) e emite um access token novo |
+| `POST /auth/logout` | cookie | Revoga a sessão e apaga o cookie (204) |
+| `GET /users/@me` | Bearer | Usuário logado |
+
+O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
+`Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.
+Erros respondem `{"code": "...", "message": "..."}`, com os códigos de `proto::ErrorCode`.
+

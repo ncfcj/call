@@ -80,6 +80,14 @@ classDiagram
     class HealthResponse {
         <<proto>>
     }
+    class auth {
+        <<module>>
+        +register()
+        +login()
+        +refresh()
+        +logout()
+        +me()
+    }
 
     main ..> Config : from_env e cors_layer
     main ..> AppState : cria com o PgPool
@@ -87,7 +95,11 @@ classDiagram
     routes ..> health : GET /health
     health ..> AppState : usa state.db
     health ..> HealthResponse : devolve
+    routes ..> auth : /auth/* e /users/@me
 ```
+
+Os módulos de autenticação estão detalhados em [05-auth.md](05-auth.md). O `Config` também lê
+`JWT_SECRET` e `COOKIE_SECURE`, e o `AppState` guarda as chaves JWT e essa flag.
 
 ## Client (`api-client`, `call-core`, `web`)
 

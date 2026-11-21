@@ -11,6 +11,23 @@ env:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # Os testes de integração (#[sqlx::test]) criam um banco por teste neste Postgres.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: call
+          POSTGRES_PASSWORD: call
+          POSTGRES_DB: call
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U call -d call"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://call:call@localhost:5432/call
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

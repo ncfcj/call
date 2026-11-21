@@ -43,8 +43,8 @@ execução e as tracejadas ainda não existem.
 
 | Crate | Depende de | O que tem hoje |
 | --- | --- | --- |
-| `proto` | `serde`, `uuid` | Tipos do health, IDs tipados e envelope de eventos WS |
-| `call-server` | `proto`, `axum`, `sqlx`, `tokio` | `GET /health`, CORS e migrations na subida |
+| `proto` | `serde`, `uuid` | Health, auth (DTOs e validação), erros, IDs tipados e envelope WS |
+| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, CORS e migrations |
 | `api-client` | `proto`, `reqwest` | `ApiClient::health()` |
 | `call-core` | `proto` | `ApiStatus` |
 | `voice` | `wasm-bindgen` | Vazio (Fase 2) |
