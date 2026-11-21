@@ -8,3 +8,7 @@ license.workspace = true
 
 [dependencies]
 proto.workspace = true
+
+[dev-dependencies]
+chrono = { workspace = true, features = ["clock"] }
+uuid.workspace = true

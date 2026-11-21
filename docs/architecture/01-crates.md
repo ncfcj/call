@@ -45,7 +45,7 @@ execução e as tracejadas ainda não existem.
 | --- | --- | --- |
 | `proto` | `serde`, `uuid`, `chrono` | Health, auth, servidores, canais e mensagens (DTOs e validação), erros, IDs tipados e envelope WS |
 | `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, servidores, canais, convites e mensagens, WebSocket (`/ws`), CORS e migrations |
-| `api-client` | `proto`, `reqwest` | `ApiClient::health()` |
-| `call-core` | `proto` | `ApiStatus` |
+| `api-client` | `proto`, `reqwest`, `gloo-net` | Todas as rotas REST, refresh automático e o WebSocket |
+| `call-core` | `proto` | `MessageLog`, `Typing`, `Backoff` e `ConnState` |
 | `voice` | `wasm-bindgen` | Vazio (Fase 2) |
-| `web` | `api-client`, `call-core`, `leptos` | Página que mostra o status da API |
+| `web` | `api-client`, `call-core`, `leptos` | Login, servidores, canais, chat em tempo real e reconexão ([08-client.md](08-client.md)) |

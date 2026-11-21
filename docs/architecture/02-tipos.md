@@ -117,48 +117,4 @@ canais e mensagens em [06-servidores.md](06-servidores.md). O `Config` também l
 
 ## Client (`api-client`, `call-core`, `web`)
 
-```mermaid
-classDiagram
-    direction LR
-
-    class ApiClient {
-        -String base_url
-        -reqwest_Client http
-        +new(base_url) ApiClient
-        +base_url() str
-        +health() Result~HealthResponse~
-    }
-    class ApiError {
-        <<enumeration>>
-        Network(reqwest_Error)
-        Status(u16)
-    }
-    class ApiStatus {
-        <<enumeration>>
-        Checking
-        Online(version, database)
-        Offline(reason)
-        +from_health(HealthResponse) ApiStatus
-    }
-    class App {
-        <<component>>
-        +signal ApiStatus
-    }
-    class status_view {
-        <<function>>
-        +status_view(ApiStatus) IntoView
-    }
-    class HealthResponse {
-        <<proto>>
-    }
-
-    ApiClient ..> ApiError : em caso de falha
-    ApiClient ..> HealthResponse : desserializa
-    ApiStatus ..> HealthResponse : from_health
-    App ..> ApiClient : new(API_URL) e health()
-    App ..> ApiStatus : Checking para Online ou Offline
-    App ..> status_view : renderiza
-```
-
-A constante `API_URL`, em `web/src/main.rs`, vem da variável `CALL_API_URL` na hora do build.
-Sem ela, aponta para `http://127.0.0.1:3000`.
+Os tipos e o fluxo do client estão em [08-client.md](08-client.md).

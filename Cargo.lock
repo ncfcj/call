@@ -47,8 +47,12 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 name = "api-client"
 version = "0.1.0"
 dependencies = [
+ "futures",
+ "gloo-net",
  "proto",
  "reqwest",
+ "serde",
+ "serde_json",
  "thiserror 2.0.21",
 ]
 
@@ -307,7 +311,9 @@ checksum = "776dfebd015e2d8732c684a2c71003674ccb49457b539b9e82151ba38e96dd7c"
 name = "call-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "proto",
+ "uuid",
 ]
 
 [[package]]
@@ -1062,6 +1068,18 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "gloo-timers"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbb143cf96099802033e0d4f4963b19fd2e0b728bcf076cd9cf7f6634f092994"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "js-sys",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3692,7 +3710,11 @@ dependencies = [
  "api-client",
  "call-core",
  "console_error_panic_hook",
+ "futures",
+ "gloo-timers",
+ "js-sys",
  "leptos",
+ "proto",
 ]
 
 [[package]]
