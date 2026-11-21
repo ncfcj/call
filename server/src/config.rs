@@ -36,7 +36,10 @@ impl Config {
         }
 
         let web_origins = std::env::var("WEB_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:8080".to_owned())
+            // O `trunk serve --open` pode abrir a página por qualquer um destes.
+            .unwrap_or_else(|_| {
+                "http://localhost:8080,http://127.0.0.1:8080,http://[::1]:8080".to_owned()
+            })
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
