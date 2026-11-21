@@ -1,0 +1,12 @@
+[package]
+name = "api-client"
+description = "Cliente REST da API do call-server (funciona em wasm32)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+proto.workspace = true
+reqwest.workspace = true
+thiserror.workspace = true

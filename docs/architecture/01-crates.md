@@ -1,0 +1,51 @@
+# Crates do workspace
+
+O `proto` é o contrato: é o único crate compilado para os dois alvos, então uma mudança nele
+quebra a compilação do lado que ficou para trás. O áudio nunca passa pelo `call-server`.
+
+```mermaid
+flowchart LR
+    subgraph nativo["Alvo nativo (VM / localhost:3000)"]
+        server["call-server<br/><i>server/</i><br/>axum · tokio · sqlx"]
+    end
+
+    subgraph shared["Nativo e wasm32"]
+        proto["proto<br/><i>crates/proto</i><br/>serde · uuid"]
+    end
+
+    subgraph wasm["Alvo wasm32 (navegador / Tauri)"]
+        web["web<br/><i>web/</i><br/>Leptos CSR · Trunk"]
+        api["api-client<br/><i>crates/api-client</i><br/>reqwest sobre fetch"]
+        core["call-core<br/><i>crates/core</i>"]
+        voice["voice<br/><i>crates/voice</i><br/>wasm-bindgen"]
+    end
+
+    pg[("Postgres<br/>migrations/")]
+    lk["LiveKit SFU<br/>(Fase 2)"]
+
+    server --> proto
+    api --> proto
+    core --> proto
+    web --> api
+    web --> core
+    web -. "Fase 2" .-> voice
+
+    web == "HTTP REST" ==> server
+    server == "sqlx" ==> pg
+    voice -. "WebRTC (Fase 2)" .-> lk
+
+    classDef pending stroke-dasharray: 5 5,color:#888
+    class voice,lk pending
+```
+
+Legenda: as setas finas são dependências no `Cargo.toml`, as grossas são chamadas em tempo de
+execução e as tracejadas ainda não existem.
+
+| Crate | Depende de | O que tem hoje |
+| --- | --- | --- |
+| `proto` | `serde`, `uuid` | Tipos do health, IDs tipados e envelope de eventos WS |
+| `call-server` | `proto`, `axum`, `sqlx`, `tokio` | `GET /health`, CORS e migrations na subida |
+| `api-client` | `proto`, `reqwest` | `ApiClient::health()` |
+| `call-core` | `proto` | `ApiStatus` |
+| `voice` | `wasm-bindgen` | Vazio (Fase 2) |
+| `web` | `api-client`, `call-core`, `leptos` | Página que mostra o status da API |

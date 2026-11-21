@@ -1,0 +1,10 @@
+[package]
+name = "call-core"
+description = "Estado do client (servidores, canais, presença, voz) sem dependência de UI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+proto.workspace = true

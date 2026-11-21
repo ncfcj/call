@@ -1,0 +1,20 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+body {
+  margin: 0;
+}
+.app {
+  max-width: 640px;
+  margin: 4rem auto;
+  padding: 0 1rem;
+}
+.status {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+}
+.status.online { color: #1a7f37; }
+.status.degraded { color: #9a6700; }
+.status.offline { color: #cf222e; }

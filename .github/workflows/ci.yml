@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: jetli/trunk-action@v0.5.0
+      - run: cargo fmt --all --check
+      # Servidor e crates compartilhados, no alvo nativo
+      - run: cargo clippy -p proto -p call-server --all-targets -- -D warnings
+      - run: cargo test -p proto -p call-server
+      # Client, no alvo do navegador
+      - run: cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
+      - working-directory: web
+        run: trunk build --release

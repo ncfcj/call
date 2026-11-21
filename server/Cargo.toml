@@ -1,0 +1,23 @@
+[package]
+name = "call-server"
+description = "API e control plane do MVP: auth, servidores, canais, chat via WebSocket e tokens de voz."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+proto.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid = { workspace = true, features = ["v7"] }
+
+anyhow = "1"
+axum = { version = "0.8", features = ["ws"] }
+dotenvy = "0.15"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "macros", "migrate"] }
+thiserror.workspace = true
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }

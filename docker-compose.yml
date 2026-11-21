@@ -1,0 +1,30 @@
+# Infra local de desenvolvimento: Postgres + LiveKit em modo dev.
+# Uso: docker compose up -d
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: call
+      POSTGRES_PASSWORD: call
+      POSTGRES_DB: call
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U call -d call"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  livekit:
+    image: livekit/livekit-server:latest
+    # --dev usa as chaves devkey/secret. --node-ip para o Docker Desktop no Windows.
+    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+
+volumes:
+  pgdata:

@@ -1,0 +1,10 @@
+[package]
+name = "voice"
+description = "Ponte wasm-bindgen com o SDK JS livekit-client (Fase 2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+wasm-bindgen.workspace = true
