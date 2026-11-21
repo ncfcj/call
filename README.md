@@ -49,16 +49,6 @@ Para apontar para outra API no build: `$env:CALL_API_URL="https://api.exemplo.co
 O `release` padrão otimiza o servidor para velocidade. O client usa o perfil `wasm-release`
 (`opt-level = "z"`, LTO), escolhido pelo `data-cargo-profile` em `web/index.html`.
 
-## Nota sobre o OneDrive
-
-Esta pasta é sincronizada pelo OneDrive. A pasta `target/` chega a vários GB e o OneDrive
-tenta sincronizá-la, o que deixa o build lento e pode travar arquivos. Aponte o diretório de
-build para fora do OneDrive, uma vez, para o seu usuário:
-
-```powershell
-setx CARGO_TARGET_DIR "$env:USERPROFILE\.cargo-target"
-```
-
 ## Qualidade
 
 ```powershell
