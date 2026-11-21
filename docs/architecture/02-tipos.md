@@ -20,12 +20,19 @@ classDiagram
 
     class ServerEvent {
         <<enumeration>>
-        Hello(heartbeat_interval_ms u64)
+        Hello(heartbeat_interval_ms, user_id)
         HeartbeatAck
+        Subscribed(guild_id, online)
+        MessageCreate(Message)
+        TypingStart(guild_id, channel_id, user_id)
+        PresenceUpdate(guild_id, user_id, status)
+        Error(code, message)
     }
     class ClientEvent {
         <<enumeration>>
         Heartbeat
+        Subscribe(guild_id)
+        TypingStart(channel_id)
     }
 
     class UserId {
@@ -42,11 +49,13 @@ classDiagram
     }
 ```
 
-- **`ServerEvent` e `ClientEvent`** são serializados como `{"t": "HELLO", "d": {...}}`, com
-  testes em `crates/proto/src/ws.rs`. O servidor ainda não tem handler de WebSocket que os use.
+- **`ServerEvent` e `ClientEvent`** são serializados como `{"t": "HELLO", "d": {...}}`. Quando cada um
+  é enviado está em [07-websocket.md](07-websocket.md).
 - **IDs tipados** (`UserId`, `GuildId`, `ChannelId`, `MessageId`) saem da macro `id_type!`: cada
   um embrulha um `Uuid` com `From<Uuid>`, `Display` e `serde(transparent)`. Assim o compilador
-  impede passar um `ChannelId` onde se espera um `UserId`. Ainda não são usados.
+  impede passar um `ChannelId` onde se espera um `UserId`.
+- **Auth, servidores, canais e mensagens:** os tipos estão em [05-auth.md](05-auth.md) e
+  [06-servidores.md](06-servidores.md).
 
 ## Servidor (`call-server`)
 
@@ -96,55 +105,16 @@ classDiagram
     health ..> AppState : usa state.db
     health ..> HealthResponse : devolve
     routes ..> auth : /auth/* e /users/@me
+    class guilds_channels_messages {
+        <<module>>
+    }
+    routes ..> guilds_channels_messages : /guilds, /channels, /invites
 ```
 
-Os módulos de autenticação estão detalhados em [05-auth.md](05-auth.md). O `Config` também lê
+Os módulos de autenticação estão detalhados em [05-auth.md](05-auth.md), e os de servidores,
+canais e mensagens em [06-servidores.md](06-servidores.md). O `Config` também lê
 `JWT_SECRET` e `COOKIE_SECURE`, e o `AppState` guarda as chaves JWT e essa flag.
 
 ## Client (`api-client`, `call-core`, `web`)
 
-```mermaid
-classDiagram
-    direction LR
-
-    class ApiClient {
-        -String base_url
-        -reqwest_Client http
-        +new(base_url) ApiClient
-        +base_url() str
-        +health() Result~HealthResponse~
-    }
-    class ApiError {
-        <<enumeration>>
-        Network(reqwest_Error)
-        Status(u16)
-    }
-    class ApiStatus {
-        <<enumeration>>
-        Checking
-        Online(version, database)
-        Offline(reason)
-        +from_health(HealthResponse) ApiStatus
-    }
-    class App {
-        <<component>>
-        +signal ApiStatus
-    }
-    class status_view {
-        <<function>>
-        +status_view(ApiStatus) IntoView
-    }
-    class HealthResponse {
-        <<proto>>
-    }
-
-    ApiClient ..> ApiError : em caso de falha
-    ApiClient ..> HealthResponse : desserializa
-    ApiStatus ..> HealthResponse : from_health
-    App ..> ApiClient : new(API_URL) e health()
-    App ..> ApiStatus : Checking para Online ou Offline
-    App ..> status_view : renderiza
-```
-
-A constante `API_URL`, em `web/src/main.rs`, vem da variável `CALL_API_URL` na hora do build.
-Sem ela, aponta para `http://127.0.0.1:3000`.
+Os tipos e o fluxo do client estão em [08-client.md](08-client.md).

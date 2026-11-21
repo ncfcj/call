@@ -16,6 +16,8 @@ pub enum AppError {
     InvalidCredentials,
     #[error("sessão inválida ou expirada")]
     Unauthorized,
+    #[error("{0}")]
+    Forbidden(&'static str),
     #[error("não encontrado")]
     NotFound,
     #[error(transparent)]
@@ -29,12 +31,18 @@ impl From<sqlx::Error> for AppError {
 }
 
 impl AppError {
+    /// Código do erro, para respostas HTTP e eventos `ERROR` do WebSocket.
+    pub fn code(&self) -> ErrorCode {
+        self.status_and_code().1
+    }
+
     fn status_and_code(&self) -> (StatusCode, ErrorCode) {
         match self {
             Self::Validation(_) => (StatusCode::UNPROCESSABLE_ENTITY, ErrorCode::Validation),
             Self::UsernameTaken => (StatusCode::CONFLICT, ErrorCode::UsernameTaken),
             Self::InvalidCredentials => (StatusCode::UNAUTHORIZED, ErrorCode::InvalidCredentials),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized),
+            Self::Forbidden(_) => (StatusCode::FORBIDDEN, ErrorCode::Forbidden),
             Self::NotFound => (StatusCode::NOT_FOUND, ErrorCode::NotFound),
             Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::Internal),
         }

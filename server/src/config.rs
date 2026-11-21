@@ -8,7 +8,9 @@ use tower_http::cors::{AllowOrigin, CorsLayer};
 #[derive(Debug, Clone)]
 pub struct Config {
     pub database_url: String,
-    pub bind_addr: SocketAddr,
+    /// Endereços em que o servidor escuta. Em desenvolvimento, IPv4 e IPv6 do loopback: o
+    /// `localhost` resolve primeiro para `::1`, e o Firefox não tenta o `127.0.0.1` depois.
+    pub bind_addrs: Vec<SocketAddr>,
     pub web_origins: Vec<HeaderValue>,
     /// Segredo HS256 dos access tokens. Pelo menos 32 bytes.
     pub jwt_secret: String,
@@ -20,13 +22,24 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let database_url = std::env::var("DATABASE_URL").context("defina DATABASE_URL")?;
 
-        let bind_addr = std::env::var("BIND_ADDR")
-            .unwrap_or_else(|_| "127.0.0.1:3000".to_owned())
-            .parse()
-            .context("BIND_ADDR inválido (ex.: 127.0.0.1:3000)")?;
+        let bind_addrs = std::env::var("BIND_ADDR")
+            .unwrap_or_else(|_| "127.0.0.1:3000,[::1]:3000".to_owned())
+            .split(',')
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                s.parse().with_context(|| format!("BIND_ADDR inválido: {s} (ex.: 127.0.0.1:3000)"))
+            })
+            .collect::<anyhow::Result<Vec<SocketAddr>>>()?;
+        if bind_addrs.is_empty() {
+            bail!("BIND_ADDR precisa de pelo menos um endereço");
+        }
 
         let web_origins = std::env::var("WEB_ORIGIN")
-            .unwrap_or_else(|_| "http://localhost:8080".to_owned())
+            // O `trunk serve --open` pode abrir a página por qualquer um destes.
+            .unwrap_or_else(|_| {
+                "http://localhost:8080,http://127.0.0.1:8080,http://[::1]:8080".to_owned()
+            })
             .split(',')
             .map(str::trim)
             .filter(|s| !s.is_empty())
@@ -47,7 +60,7 @@ impl Config {
             Ok(other) => bail!("COOKIE_SECURE deve ser true ou false, não {other:?}"),
         };
 
-        Ok(Self { database_url, bind_addr, web_origins, jwt_secret, cookie_secure })
+        Ok(Self { database_url, bind_addrs, web_origins, jwt_secret, cookie_secure })
     }
 
     /// CORS restrito às origens do client. Lembrete: CORS não protege WebSocket;

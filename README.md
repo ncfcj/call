@@ -41,7 +41,9 @@ cd web
 trunk serve --open
 ```
 
-A página abre em `http://localhost:8080` e mostra se a API e o banco estão online.
+A página abre em `http://localhost:8080`, na tela de entrada. O client chama a API no mesmo host
+da página, na porta 3000. Abra por `localhost` e não por `127.0.0.1`: se o host for diferente
+do da API, o navegador não manda o cookie da sessão.
 Para apontar para outra API no build: `$env:CALL_API_URL="https://api.exemplo.com"; trunk build --release`.
 
 ## Perfis de build
@@ -61,6 +63,35 @@ cargo test -p proto -p call-server
 Os testes de integração do servidor (`server/tests/`) precisam do Postgres do `docker compose`
 ligado e de `DATABASE_URL` no ambiente: cada teste cria e apaga um banco próprio.
 
+### Teste funcional de cada etapa
+
+Cada etapa tem um script em `scripts/` que passa pelo fluxo real contra o servidor rodando
+(`cargo run -p call-server`) e imprime OK ou FALHOU por passo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
+```
+
+| Script | Etapa |
+| --- | --- |
+| `teste-servidores.ps1` | Servidores, canais, convite, permissões de dono e histórico de mensagens |
+| `teste-websocket.ps1` | Ticket, heartbeat, inscrição, presença, digitação e mensagem em tempo real com três conexões |
+| `teste-client.ps1 -Convite <código>` | Um robô entra no seu servidor e conversa com você no navegador (veja abaixo) |
+
+Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
+
+**Client no navegador.** Com o servidor e o `trunk serve` rodando:
+
+1. Crie uma conta, crie um servidor e copie o código de convite que aparece abaixo do nome dele.
+2. Rode `powershell -ExecutionPolicy Bypass -File scripts	este-client.ps1 -Convite <código>`.
+   O robô aparece online, digita e manda uma mensagem. Ele responde cada mensagem sua.
+3. Pare o servidor (Ctrl+C), espere alguns segundos e suba de novo. O rodapé mostra
+   "Sem conexão. Tentando em N s" e volta para "Conectado" sozinho, e nenhuma mensagem some.
+4. Recarregue a página: a sessão continua. Clique em "Sair" e recarregue: volta para a entrada.
+
+Para conversar entre duas pessoas de verdade, use dois navegadores (ou uma janela anônima),
+porque a sessão fica num cookie por navegador.
+
 ## API
 
 | Rota | Auth | O que faz |
@@ -71,8 +102,18 @@ ligado e de `DATABASE_URL` no ambiente: cada teste cria e apaga um banco própri
 | `POST /auth/refresh` | cookie | Troca o refresh token (rotação) e emite um access token novo |
 | `POST /auth/logout` | cookie | Revoga a sessão e apaga o cookie (204) |
 | `GET /users/@me` | Bearer | Usuário logado |
+| `GET /users/@me/guilds` | Bearer | Servidores do usuário |
+| `POST /guilds`, `GET/PATCH/DELETE /guilds/{id}` | Bearer | Cria, vê, renomeia e apaga um servidor (mudanças só para o dono) |
+| `GET /guilds/{id}/members`, `DELETE /guilds/{id}/members/@me` | Bearer | Lista os membros e sai do servidor |
+| `POST /invites/{code}` | Bearer | Entra no servidor pelo código de convite |
+| `GET/POST /guilds/{id}/channels`, `PATCH/DELETE /channels/{id}` | Bearer | Canais de texto e voz (mudanças só para o dono) |
+| `GET/POST /channels/{id}/messages` | Bearer | Histórico paginado (`before`, `after`, `limit`) e envio de mensagem |
+| `POST /ws/ticket` | Bearer | Ticket de uso único (30 s) para abrir o WebSocket |
+| `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat |
 
 O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
 `Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.
 Erros respondem `{"code": "...", "message": "..."}`, com os códigos de `proto::ErrorCode`.
+Quem não é membro de um servidor recebe 404 nas rotas dele. Os detalhes estão em
+`docs/architecture/06-servidores.md` e `docs/architecture/07-websocket.md`.
 

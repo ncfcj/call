@@ -1,8 +1,8 @@
 # Banco de dados
 
 Este é o esquema das migrations em `migrations/`, aplicadas na subida do servidor. Hoje o código
-usa `users` e `refresh_tokens` (autenticação); as outras tabelas entram nas próximas partes da
-Fase 1. Os IDs são UUIDv7
+usa todas as tabelas: `users` e `refresh_tokens` na autenticação, e as outras nas rotas de
+servidores, canais e mensagens ([06-servidores.md](06-servidores.md)). Os IDs são UUIDv7
 gerados pela aplicação e correspondem aos tipos `UserId`, `GuildId`, `ChannelId` e `MessageId`
 do `proto`.
 

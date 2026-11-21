@@ -10,7 +10,7 @@ flowchart LR
     end
 
     subgraph shared["Nativo e wasm32"]
-        proto["proto<br/><i>crates/proto</i><br/>serde · uuid"]
+        proto["proto<br/><i>crates/proto</i><br/>serde · uuid · chrono"]
     end
 
     subgraph wasm["Alvo wasm32 (navegador / Tauri)"]
@@ -30,7 +30,7 @@ flowchart LR
     web --> core
     web -. "Fase 2" .-> voice
 
-    web == "HTTP REST" ==> server
+    web == "HTTP REST e WebSocket" ==> server
     server == "sqlx" ==> pg
     voice -. "WebRTC (Fase 2)" .-> lk
 
@@ -43,9 +43,9 @@ execução e as tracejadas ainda não existem.
 
 | Crate | Depende de | O que tem hoje |
 | --- | --- | --- |
-| `proto` | `serde`, `uuid` | Health, auth (DTOs e validação), erros, IDs tipados e envelope WS |
-| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, CORS e migrations |
-| `api-client` | `proto`, `reqwest` | `ApiClient::health()` |
-| `call-core` | `proto` | `ApiStatus` |
+| `proto` | `serde`, `uuid`, `chrono` | Health, auth, servidores, canais e mensagens (DTOs e validação), erros, IDs tipados e envelope WS |
+| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, servidores, canais, convites e mensagens, WebSocket (`/ws`), CORS e migrations |
+| `api-client` | `proto`, `reqwest`, `gloo-net` | Todas as rotas REST, refresh automático e o WebSocket |
+| `call-core` | `proto` | `MessageLog`, `Typing`, `Backoff` e `ConnState` |
 | `voice` | `wasm-bindgen` | Vazio (Fase 2) |
-| `web` | `api-client`, `call-core`, `leptos` | Página que mostra o status da API |
+| `web` | `api-client`, `call-core`, `leptos` | Login, servidores, canais, chat em tempo real e reconexão ([08-client.md](08-client.md)) |

@@ -1,6 +1,6 @@
 [package]
 name = "api-client"
-description = "Cliente REST da API do call-server (funciona em wasm32)."
+description = "Cliente REST e WebSocket da API do call-server (funciona em wasm32)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,4 +9,10 @@ license.workspace = true
 [dependencies]
 proto.workspace = true
 reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+futures = "0.3"
+gloo-net = { version = "0.6", default-features = false, features = ["websocket"] }

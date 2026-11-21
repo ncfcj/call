@@ -29,15 +29,26 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await.context("falha ao aplicar migrations")?;
 
-    let state = AppState::new(db, &config.jwt_secret, config.cookie_secure);
+    let state =
+        AppState::new(db, &config.jwt_secret, config.cookie_secure, config.web_origins.clone());
     let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
-    let listener = tokio::net::TcpListener::bind(config.bind_addr)
-        .await
-        .with_context(|| format!("não foi possível escutar em {}", config.bind_addr))?;
-    tracing::info!("call-server ouvindo em http://{}", listener.local_addr()?);
-
-    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal()).await?;
+    // Um listener por endereço, todos com o mesmo app (o mesmo estado e o mesmo hub).
+    let mut servers = tokio::task::JoinSet::new();
+    for addr in &config.bind_addrs {
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
+            .with_context(|| format!("não foi possível escutar em {addr}"))?;
+        tracing::info!("call-server ouvindo em http://{}", listener.local_addr()?);
+        servers.spawn(
+            axum::serve(listener, app.clone())
+                .with_graceful_shutdown(shutdown_signal())
+                .into_future(),
+        );
+    }
+    while let Some(result) = servers.join_next().await {
+        result.context("servidor HTTP terminou com pânico")??;
+    }
     Ok(())
 }
 

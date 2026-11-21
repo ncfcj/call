@@ -7,4 +7,4 @@ rust-version.workspace = true
 license.workspace = true
 
 [dependencies]
-wasm-bindgen.workspace = true
+# wasm-bindgen.workspace = true  # volta na Fase 2, com a ponte para o livekit-client
