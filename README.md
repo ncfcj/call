@@ -61,6 +61,21 @@ cargo test -p proto -p call-server
 Os testes de integração do servidor (`server/tests/`) precisam do Postgres do `docker compose`
 ligado e de `DATABASE_URL` no ambiente: cada teste cria e apaga um banco próprio.
 
+### Teste funcional de cada etapa
+
+Cada etapa tem um script em `scripts/` que passa pelo fluxo real contra o servidor rodando
+(`cargo run -p call-server`) e imprime OK ou FALHOU por passo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
+```
+
+| Script | Etapa |
+| --- | --- |
+| `teste-servidores.ps1` | Servidores, canais, convite, permissões de dono e histórico de mensagens |
+
+Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
+
 ## API
 
 | Rota | Auth | O que faz |
@@ -71,8 +86,16 @@ ligado e de `DATABASE_URL` no ambiente: cada teste cria e apaga um banco própri
 | `POST /auth/refresh` | cookie | Troca o refresh token (rotação) e emite um access token novo |
 | `POST /auth/logout` | cookie | Revoga a sessão e apaga o cookie (204) |
 | `GET /users/@me` | Bearer | Usuário logado |
+| `GET /users/@me/guilds` | Bearer | Servidores do usuário |
+| `POST /guilds`, `GET/PATCH/DELETE /guilds/{id}` | Bearer | Cria, vê, renomeia e apaga um servidor (mudanças só para o dono) |
+| `GET /guilds/{id}/members`, `DELETE /guilds/{id}/members/@me` | Bearer | Lista os membros e sai do servidor |
+| `POST /invites/{code}` | Bearer | Entra no servidor pelo código de convite |
+| `GET/POST /guilds/{id}/channels`, `PATCH/DELETE /channels/{id}` | Bearer | Canais de texto e voz (mudanças só para o dono) |
+| `GET/POST /channels/{id}/messages` | Bearer | Histórico paginado (`before`, `after`, `limit`) e envio de mensagem |
 
 O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
 `Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.
 Erros respondem `{"code": "...", "message": "..."}`, com os códigos de `proto::ErrorCode`.
+Quem não é membro de um servidor recebe 404 nas rotas dele. Os detalhes estão em
+`docs/architecture/06-servidores.md`.
 

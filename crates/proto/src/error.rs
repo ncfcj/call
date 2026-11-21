@@ -16,6 +16,8 @@ pub enum ErrorCode {
     UsernameTaken,
     InvalidCredentials,
     Unauthorized,
+    /// Autenticado, mas sem permissão (por exemplo, quem não é dono tentando apagar o servidor).
+    Forbidden,
     NotFound,
     Internal,
     /// Código que esta versão do client ainda não conhece.

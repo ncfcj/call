@@ -5,11 +5,18 @@
 
 pub mod auth;
 pub mod error;
+pub mod guild;
 pub mod health;
 pub mod ids;
+pub mod message;
 pub mod ws;
 
 pub use auth::{AuthResponse, LoginRequest, RegisterRequest, User};
 pub use error::{ErrorCode, ErrorResponse};
+pub use guild::{
+    Channel, ChannelKind, CreateChannelRequest, CreateGuildRequest, Guild, Member,
+    UpdateChannelRequest, UpdateGuildRequest,
+};
 pub use health::{HealthResponse, HealthStatus};
 pub use ids::{ChannelId, GuildId, MessageId, UserId};
+pub use message::{CreateMessageRequest, Message, MessagesQuery};

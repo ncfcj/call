@@ -16,6 +16,8 @@ pub enum AppError {
     InvalidCredentials,
     #[error("sessão inválida ou expirada")]
     Unauthorized,
+    #[error("{0}")]
+    Forbidden(&'static str),
     #[error("não encontrado")]
     NotFound,
     #[error(transparent)]
@@ -35,6 +37,7 @@ impl AppError {
             Self::UsernameTaken => (StatusCode::CONFLICT, ErrorCode::UsernameTaken),
             Self::InvalidCredentials => (StatusCode::UNAUTHORIZED, ErrorCode::InvalidCredentials),
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, ErrorCode::Unauthorized),
+            Self::Forbidden(_) => (StatusCode::FORBIDDEN, ErrorCode::Forbidden),
             Self::NotFound => (StatusCode::NOT_FOUND, ErrorCode::NotFound),
             Self::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, ErrorCode::Internal),
         }

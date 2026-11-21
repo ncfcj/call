@@ -10,7 +10,7 @@ flowchart LR
     end
 
     subgraph shared["Nativo e wasm32"]
-        proto["proto<br/><i>crates/proto</i><br/>serde · uuid"]
+        proto["proto<br/><i>crates/proto</i><br/>serde · uuid · chrono"]
     end
 
     subgraph wasm["Alvo wasm32 (navegador / Tauri)"]
@@ -43,8 +43,8 @@ execução e as tracejadas ainda não existem.
 
 | Crate | Depende de | O que tem hoje |
 | --- | --- | --- |
-| `proto` | `serde`, `uuid` | Health, auth (DTOs e validação), erros, IDs tipados e envelope WS |
-| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, CORS e migrations |
+| `proto` | `serde`, `uuid`, `chrono` | Health, auth, servidores, canais e mensagens (DTOs e validação), erros, IDs tipados e envelope WS |
+| `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, servidores, canais, convites e mensagens, CORS e migrations |
 | `api-client` | `proto`, `reqwest` | `ApiClient::health()` |
 | `call-core` | `proto` | `ApiStatus` |
 | `voice` | `wasm-bindgen` | Vazio (Fase 2) |

@@ -46,7 +46,9 @@ classDiagram
   testes em `crates/proto/src/ws.rs`. O servidor ainda não tem handler de WebSocket que os use.
 - **IDs tipados** (`UserId`, `GuildId`, `ChannelId`, `MessageId`) saem da macro `id_type!`: cada
   um embrulha um `Uuid` com `From<Uuid>`, `Display` e `serde(transparent)`. Assim o compilador
-  impede passar um `ChannelId` onde se espera um `UserId`. Ainda não são usados.
+  impede passar um `ChannelId` onde se espera um `UserId`.
+- **Auth, servidores, canais e mensagens:** os tipos estão em [05-auth.md](05-auth.md) e
+  [06-servidores.md](06-servidores.md).
 
 ## Servidor (`call-server`)
 
@@ -96,9 +98,14 @@ classDiagram
     health ..> AppState : usa state.db
     health ..> HealthResponse : devolve
     routes ..> auth : /auth/* e /users/@me
+    class guilds_channels_messages {
+        <<module>>
+    }
+    routes ..> guilds_channels_messages : /guilds, /channels, /invites
 ```
 
-Os módulos de autenticação estão detalhados em [05-auth.md](05-auth.md). O `Config` também lê
+Os módulos de autenticação estão detalhados em [05-auth.md](05-auth.md), e os de servidores,
+canais e mensagens em [06-servidores.md](06-servidores.md). O `Config` também lê
 `JWT_SECRET` e `COOKIE_SECURE`, e o `AppState` guarda as chaves JWT e essa flag.
 
 ## Client (`api-client`, `call-core`, `web`)
