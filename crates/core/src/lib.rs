@@ -7,6 +7,7 @@
 mod backoff;
 mod messages;
 mod typing;
+pub mod ui;
 mod voice_controls;
 
 pub use backoff::Backoff;

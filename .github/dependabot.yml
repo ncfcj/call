@@ -1,0 +1,23 @@
+# Atualizações de dependências (gratuito, também em repositório privado). Cada PR do
+# Dependabot passa pelos mesmos portões do CI antes do merge.
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Patches e minors juntos num PR só; majors vêm separados, para revisar com calma.
+      cargo-menores:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        patterns: ["*"]

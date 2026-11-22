@@ -53,11 +53,17 @@ O `release` padrão otimiza o servidor para velocidade. O client usa o perfil `w
 
 ## Qualidade
 
+O CI barra o PR se algum destes portões falhar: formatação, análise estática (clippy com as
+regras do workspace, nos dois alvos), 100% dos testes passando, build do client, dependências
+(vulnerabilidades e licenças) e testes de mutação. Detalhes, e como rodar cada um localmente, em
+[docs/qualidade.md](docs/qualidade.md).
+
 ```powershell
 cargo fmt --all
-cargo clippy -p proto -p call-server --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
-cargo test -p proto -p call-server
+cargo test --workspace
+cargo deny check
 ```
 
 Os testes de integração do servidor (`server/tests/`) precisam do Postgres do `docker compose`

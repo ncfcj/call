@@ -31,14 +31,16 @@ pub async fn connect(
     WsError,
 > {
     let ticket = api.ws_ticket().await?;
-    open(api.ws_url(&ticket.ticket))
+    open(&api.ws_url(&ticket.ticket))
 }
 
 fn open(
-    url: String,
-) -> Result<(impl Sink<ClientEvent, Error = WsError>, LocalBoxStream<'static, ServerEvent>), WsError>
-{
-    let socket = WebSocket::open(&url).map_err(|err| WsError::Open(err.to_string()))?;
+    url: &str,
+) -> Result<
+    (impl Sink<ClientEvent, Error = WsError> + use<>, LocalBoxStream<'static, ServerEvent>),
+    WsError,
+> {
+    let socket = WebSocket::open(url).map_err(|err| WsError::Open(err.to_string()))?;
     let (sink, stream) = socket.split();
 
     let sink = sink.sink_map_err(WsError::from).with(|event: ClientEvent| async move {

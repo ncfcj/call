@@ -81,3 +81,80 @@ impl LiveKit {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use base64::{Engine, engine::general_purpose::STANDARD};
+    use proto::UserId;
+    use sha2::{Digest, Sha256};
+    use uuid::Uuid;
+
+    use super::*;
+
+    fn livekit() -> LiveKit {
+        LiveKit::new("ws://lk", "chave", "segredo-do-livekit")
+    }
+
+    fn user() -> User {
+        User { id: UserId(Uuid::from_u128(7)), username: "ana".into(), display_name: "Ana".into() }
+    }
+
+    #[test]
+    fn join_token_allows_only_the_microphone_in_that_room() {
+        let channel = ChannelId(Uuid::from_u128(42));
+        let jwt = livekit().join_token(&user(), channel).unwrap();
+        let claims =
+            TokenVerifier::with_api_key("chave", "segredo-do-livekit").verify(&jwt).unwrap();
+        assert_eq!(claims.iss, "chave");
+        assert_eq!(claims.sub, user().id.to_string());
+        assert_eq!(claims.name, "Ana");
+        assert_eq!(claims.video.room, channel.to_string());
+        assert!(
+            claims.video.room_join && claims.video.can_publish() && claims.video.can_subscribe()
+        );
+        assert!(!claims.video.can_publish_data() && !claims.video.can_update_own_metadata());
+        assert_eq!(claims.video.can_publish_sources, ["microphone"]);
+        assert!(!claims.video.room_admin && !claims.video.room_create && !claims.video.room_list);
+        assert_eq!(claims.exp - claims.nbf, usize::try_from(VOICE_TOKEN_TTL.as_secs()).unwrap());
+        assert_eq!(claims.room_config.unwrap().max_participants, VOICE_MAX_PARTICIPANTS);
+    }
+
+    #[test]
+    fn token_signed_with_another_secret_is_rejected() {
+        let jwt = livekit().join_token(&user(), ChannelId(Uuid::nil())).unwrap();
+        assert!(TokenVerifier::with_api_key("chave", "outro-segredo").verify(&jwt).is_err());
+    }
+
+    fn signed(body: &str, secret: &str) -> String {
+        let hash = STANDARD.encode(Sha256::digest(body.as_bytes()));
+        AccessToken::with_api_key("chave", secret).with_sha256(&hash).to_jwt().unwrap()
+    }
+
+    #[test]
+    fn webhook_with_the_right_signature_is_read() {
+        let body = r#"{"event":"participant_joined","room":{"name":"sala"},"participant":{"sid":"PA_1","identity":"u1"}}"#;
+        let auth = signed(body, "segredo-do-livekit");
+        for header in [auth.clone(), format!("Bearer {auth}")] {
+            let event = livekit().receive_webhook(body, &header).unwrap();
+            assert_eq!(event.event, "participant_joined");
+            assert_eq!(event.room.unwrap().name, "sala");
+            assert_eq!(event.participant.unwrap().identity, "u1");
+        }
+    }
+
+    #[test]
+    fn webhook_is_rejected_when_signature_or_body_do_not_match() {
+        let body = r#"{"event":"room_finished","room":{"name":"sala"}}"#;
+        assert!(livekit().receive_webhook(body, &signed(body, "segredo-errado")).is_none());
+        let other = r#"{"event":"room_finished","room":{"name":"outra"}}"#;
+        assert!(livekit().receive_webhook(other, &signed(body, "segredo-do-livekit")).is_none());
+        assert!(livekit().receive_webhook(body, "").is_none());
+    }
+
+    #[test]
+    fn debug_never_shows_the_secret() {
+        let text = format!("{:?}", livekit());
+        assert!(text.contains("chave") && text.contains("ws://lk"));
+        assert!(!text.contains("segredo-do-livekit"));
+    }
+}

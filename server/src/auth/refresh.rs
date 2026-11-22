@@ -58,6 +58,35 @@ pub async fn start_session(db: &PgPool, user: UserId) -> AppResult<String> {
     Ok(token)
 }
 
+/// O que fazer com um refresh token apresentado.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    /// Válido: marca como usado e emite o próximo.
+    Rotate,
+    /// Vencido, revogado, ou reusado dentro da janela de tolerância (outra aba): só recusa.
+    Reject,
+    /// Reusado fora da janela: sinal de roubo; revoga a família inteira.
+    RevokeFamily,
+}
+
+fn classify(
+    expires_at: DateTime<Utc>,
+    used_at: Option<DateTime<Utc>>,
+    revoked_at: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Verdict {
+    if revoked_at.is_some() || expires_at <= now {
+        return Verdict::Reject;
+    }
+    match used_at {
+        None => Verdict::Rotate,
+        Some(used_at) if now - used_at > Duration::seconds(REUSE_GRACE_SECS) => {
+            Verdict::RevokeFamily
+        }
+        Some(_) => Verdict::Reject,
+    }
+}
+
 #[derive(sqlx::FromRow)]
 struct TokenRow {
     id: Uuid,
@@ -85,19 +114,16 @@ pub async fn rotate(db: &PgPool, token: &str) -> AppResult<(UserId, String)> {
     .await?;
 
     let Some(row) = row else { return Err(AppError::Unauthorized) };
-    let now = Utc::now();
 
-    if row.revoked_at.is_some() || row.expires_at <= now {
-        return Err(AppError::Unauthorized);
-    }
-
-    if let Some(used_at) = row.used_at {
-        if now - used_at > Duration::seconds(REUSE_GRACE_SECS) {
+    match classify(row.expires_at, row.used_at, row.revoked_at, Utc::now()) {
+        Verdict::Rotate => {}
+        Verdict::Reject => return Err(AppError::Unauthorized),
+        Verdict::RevokeFamily => {
             tracing::warn!(user = %row.user_id, family = %row.family_id, "refresh token reusado: revogando a família");
             revoke_family(&mut tx, row.family_id).await?;
             tx.commit().await?;
+            return Err(AppError::Unauthorized);
         }
-        return Err(AppError::Unauthorized);
     }
 
     sqlx::query("UPDATE refresh_tokens SET used_at = now() WHERE id = $1")
@@ -133,4 +159,62 @@ async fn revoke_family(tx: &mut Transaction<'_, Postgres>, family: Uuid) -> sqlx
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn at(secs: i64) -> DateTime<Utc> {
+        DateTime::from_timestamp(1_800_000_000 + secs, 0).unwrap()
+    }
+
+    #[test]
+    fn token_is_256_random_bits_and_only_its_hash_is_kept() {
+        let (token, token_hash) = generate();
+        assert_eq!(token.len(), 43, "32 bytes em base64url sem padding");
+        assert!(token.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'));
+        assert_eq!(token_hash, hash(&token));
+        assert_eq!(token_hash.len(), 32, "SHA-256");
+        let (other, _) = generate();
+        assert_ne!(token, other);
+    }
+
+    #[test]
+    fn hash_is_sha256_of_the_token() {
+        // SHA-256 de "abc", vetor de teste do NIST.
+        let expected = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        let hex: String = hash("abc").iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(hex, expected);
+    }
+
+    #[test]
+    fn fresh_token_rotates() {
+        assert_eq!(classify(at(100), None, None, at(0)), Verdict::Rotate);
+    }
+
+    #[test]
+    fn expired_or_revoked_token_is_rejected() {
+        assert_eq!(classify(at(0), None, None, at(0)), Verdict::Reject, "vence no instante exato");
+        assert_eq!(classify(at(-1), None, None, at(0)), Verdict::Reject);
+        assert_eq!(classify(at(100), None, Some(at(-5)), at(0)), Verdict::Reject);
+        // Revogado e reusado: só recusa (a família já foi revogada).
+        assert_eq!(classify(at(100), Some(at(-60)), Some(at(-5)), at(0)), Verdict::Reject);
+    }
+
+    #[test]
+    fn reuse_within_the_grace_window_is_only_rejected() {
+        assert_eq!(classify(at(100), Some(at(-1)), None, at(0)), Verdict::Reject);
+        assert_eq!(
+            classify(at(100), Some(at(-10)), None, at(0)),
+            Verdict::Reject,
+            "10 s ainda é tolerado"
+        );
+    }
+
+    #[test]
+    fn reuse_after_the_grace_window_revokes_the_family() {
+        assert_eq!(classify(at(100), Some(at(-11)), None, at(0)), Verdict::RevokeFamily);
+        assert_eq!(classify(at(100), Some(at(-3600)), None, at(0)), Verdict::RevokeFamily);
+    }
 }

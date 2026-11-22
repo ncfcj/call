@@ -183,7 +183,7 @@ impl Store {
     }
 
     /// Mostra o erro de uma ação, ou volta para o login se a sessão acabou.
-    pub fn report(self, err: ApiError) {
+    pub fn report(self, err: &ApiError) {
         if err.is_unauthorized() {
             self.session_expired();
         } else {
@@ -214,7 +214,7 @@ impl Store {
                     }
                 }
                 Ok(_) => {}
-                Err(err) => self.report(err),
+                Err(err) => self.report(&err),
             }
         });
     }
@@ -278,7 +278,7 @@ impl Store {
                         }
                     }
                     Ok(_) => return,
-                    Err(err) => return self.report(err),
+                    Err(err) => return self.report(&err),
                 }
             }
         });
@@ -301,7 +301,7 @@ impl Store {
                         }
                     }
                     Ok(_) => {}
-                    Err(err) => self.report(err),
+                    Err(err) => self.report(&err),
                 }
             }),
         }
@@ -327,7 +327,7 @@ impl Store {
                     m.insert(guild, members);
                 }),
                 Ok(_) => {}
-                Err(err) => self.report(err),
+                Err(err) => self.report(&err),
             }
         });
     }
@@ -356,7 +356,7 @@ impl Store {
                     });
                 }
                 Ok(_) => {}
-                Err(err) => self.report(err),
+                Err(err) => self.report(&err),
             }
         });
     }
@@ -379,7 +379,7 @@ impl Store {
                     }
                 });
             }
-            Err(err) => self.report(err),
+            Err(err) => self.report(&err),
         }
     }
 
@@ -402,7 +402,7 @@ impl Store {
                 true
             }
             Err(err) => {
-                self.report(err);
+                self.report(&err);
                 false
             }
         }
@@ -419,7 +419,7 @@ impl Store {
                 false
             }
             Err(err) => {
-                self.report(err);
+                self.report(&err);
                 false
             }
         }
@@ -443,7 +443,7 @@ impl Store {
                     }
                 }
             }
-            Err(err) => self.report(err),
+            Err(err) => self.report(&err),
         }
     }
 
@@ -458,7 +458,7 @@ impl Store {
                 true
             }
             Err(err) => {
-                self.report(err);
+                self.report(&err);
                 false
             }
         }
@@ -477,7 +477,7 @@ impl Store {
                 true
             }
             Err(err) => {
-                self.report(err);
+                self.report(&err);
                 false
             }
         }

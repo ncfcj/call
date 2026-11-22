@@ -112,3 +112,52 @@ pub async fn channel_member(
     };
     Ok(ChannelAccess { channel: row.channel.try_into()?, guild })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn access(owner: u128, user: u128) -> GuildAccess {
+        GuildAccess {
+            guild_id: GuildId(Uuid::from_u128(1)),
+            owner_id: UserId(Uuid::from_u128(owner)),
+            user_id: UserId(Uuid::from_u128(user)),
+        }
+    }
+
+    #[test]
+    fn only_the_owner_passes_require_owner() {
+        assert!(access(7, 7).is_owner());
+        assert!(access(7, 7).require_owner().is_ok());
+        assert!(!access(7, 8).is_owner());
+        let err = access(7, 8).require_owner().unwrap_err();
+        assert!(matches!(err, AppError::Forbidden(_)));
+    }
+
+    fn row(kind: &str) -> ChannelRow {
+        ChannelRow {
+            id: Uuid::from_u128(10),
+            guild_id: Uuid::from_u128(1),
+            name: "geral".into(),
+            kind: kind.into(),
+            position: 3,
+        }
+    }
+
+    #[test]
+    fn channel_row_becomes_a_channel() {
+        let channel = Channel::try_from(row("voice")).unwrap();
+        assert_eq!(channel.id, ChannelId(Uuid::from_u128(10)));
+        assert_eq!(channel.guild_id, GuildId(Uuid::from_u128(1)));
+        assert_eq!(channel.name, "geral");
+        assert_eq!(channel.kind, ChannelKind::Voice);
+        assert_eq!(channel.position, 3);
+        assert_eq!(Channel::try_from(row("text")).unwrap().kind, ChannelKind::Text);
+    }
+
+    #[test]
+    fn unknown_channel_kind_is_an_internal_error() {
+        let err = Channel::try_from(row("video")).unwrap_err();
+        assert!(matches!(err, AppError::Internal(_)));
+    }
+}

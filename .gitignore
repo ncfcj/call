@@ -2,3 +2,4 @@
 /web/dist
 .env
 *.log
+/mutants.out*

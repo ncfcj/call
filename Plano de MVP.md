@@ -225,6 +225,34 @@ Impactos a considerar antes de escolher:
 
 Pronto quando: o nível escolhido está implementado, um dump do banco não revela o texto das mensagens, e (no nível B) o SFU encaminha áudio que ele mesmo não consegue decifrar.
 
+## Qualidade e segurança do código
+
+Portões no CI, todos gratuitos (detalhes em `docs/qualidade.md`). O check `ci-ok` só fica verde
+se todos passarem.
+
+- [x] Formatação e análise estática: `clippy` com regras do workspace (`[workspace.lints]`), nos dois alvos
+- [x] 100% dos testes passando: unitários e de integração com Postgres, com relatório de cobertura (`cargo-llvm-cov`)
+- [x] Testes de mutação (`cargo-mutants`): nas linhas alteradas de cada PR e no workspace inteiro toda semana
+- [x] Dependências: vulnerabilidades (RustSec), licenças, crates banidos e origens (`cargo-deny`)
+- [x] Atualizações automáticas de dependências e Actions (Dependabot)
+- [ ] Bloquear o merge sem o `ci-ok` verde: exige proteção de branch, que em repositório privado só existe no GitHub Pro (ou tornando o repositório público)
+
+Próximas etapas sugeridas, em ordem de custo-benefício:
+
+| Etapa | Para quê | Ferramenta gratuita |
+| --- | --- | --- |
+| Varredura de segredos | Barrar `.env`, `JWT_SECRET` e chaves no repositório, no CI e antes do commit | gitleaks |
+| Testes de ponta a ponta no navegador | Automatizar o que hoje é manual: login, chat em duas sessões e voz com microfone falso | Playwright (Chromium e Firefox) |
+| Testes por propriedade | Gerar milhares de entradas para as validações, o `MessageLog` e o `VoiceStates` | proptest |
+| Fuzzing | Achar pânicos nos parsers que recebem dados de fora: eventos do WebSocket, webhook do LiveKit | cargo-fuzz |
+| Teste de carga | Medir quantas conexões e mensagens o hub aguenta antes do deploy | k6 |
+| Varredura dinâmica (DAST) | Conferir cabeçalhos de segurança, CORS e cookies no ambiente publicado | OWASP ZAP (baseline) |
+| Imagens e VM | Vulnerabilidades no sistema e nas imagens Docker do deploy | Trivy |
+| SBOM | Inventário das dependências de cada versão publicada | cargo-cyclonedx |
+| Ganchos locais | Rodar `fmt` e `clippy` antes de cada commit | git hooks (pre-commit) |
+| Análise semântica | CodeQL ou SonarQube Cloud, gratuitos só para repositório público | CodeQL, SonarQube Cloud |
+| Trocar o `chrono` | Sair do crate sem manutenção quando o `sqlx` e a `livekit-api` permitirem | `time` ou `jiff` |
+
 ## Ideias para o futuro (opcionais, sem data)
 
 Conceitos anotados para revisitar depois do MVP. Nenhum está planejado nem tem implementação decidida.
@@ -275,6 +303,8 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
 - **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
+- **`chrono` sem manutenção (RUSTSEC-2026-0543):** vem do `sqlx` e da `livekit-api`; a exceção está no `deny.toml`. Migrar para `time` ou `jiff` quando as dependências permitirem.
+- **Merge sem o CI verde:** sem proteção de branch (repositório privado no plano gratuito), o CI marca o PR em vermelho mas não bloqueia o botão de merge.
 
 ## Riscos técnicos e mitigação
 

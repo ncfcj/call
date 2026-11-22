@@ -29,7 +29,8 @@ use crate::{
 };
 use hub::ConnId;
 
-pub const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(30);
+const HEARTBEAT_INTERVAL_MS: u64 = 30_000;
+pub const HEARTBEAT_INTERVAL: Duration = Duration::from_millis(HEARTBEAT_INTERVAL_MS);
 /// Sem nenhuma mensagem do client nesse prazo, a conexão é considerada morta.
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -67,10 +68,7 @@ async fn run(state: AppState, user: UserId, mut socket: WebSocket) {
     let (conn, mut queue) = state.hub.register(user);
     tracing::debug!(conn, %user, "WS conectado");
 
-    let hello = ServerEvent::Hello {
-        heartbeat_interval_ms: HEARTBEAT_INTERVAL.as_millis() as u64,
-        user_id: user,
-    };
+    let hello = ServerEvent::Hello { heartbeat_interval_ms: HEARTBEAT_INTERVAL_MS, user_id: user };
     let mut deadline = Instant::now() + HEARTBEAT_TIMEOUT;
 
     if send(&mut socket, &hello).await {
@@ -116,11 +114,8 @@ async fn run(state: AppState, user: UserId, mut socket: WebSocket) {
 
 /// Trata um evento do client. Devolve a resposta direta, se houver.
 async fn handle(state: &AppState, conn: ConnId, user: UserId, text: &str) -> Option<ServerEvent> {
-    let event = match serde_json::from_str::<ClientEvent>(text) {
-        Ok(event) => event,
-        Err(_) => {
-            return Some(error_event(ErrorCode::Validation, "evento desconhecido ou malformado"));
-        }
+    let Ok(event) = serde_json::from_str::<ClientEvent>(text) else {
+        return Some(error_event(ErrorCode::Validation, "evento desconhecido ou malformado"));
     };
     let result: AppResult<Option<ServerEvent>> = async {
         match event {
@@ -161,16 +156,16 @@ async fn handle(state: &AppState, conn: ConnId, user: UserId, text: &str) -> Opt
         }
     }
     .await;
-    result.unwrap_or_else(|err| Some(app_error_event(err)))
+    result.unwrap_or_else(|err| Some(app_error_event(&err)))
 }
 
 fn error_event(code: ErrorCode, message: &str) -> ServerEvent {
     ServerEvent::Error { code, message: message.to_owned() }
 }
 
-fn app_error_event(err: AppError) -> ServerEvent {
+fn app_error_event(err: &AppError) -> ServerEvent {
     let code = err.code();
-    let message = match &err {
+    let message = match err {
         AppError::Internal(inner) => {
             tracing::error!(error = ?inner, "erro interno no WS");
             "erro interno do servidor".to_owned()
@@ -188,5 +183,34 @@ async fn send(socket: &mut WebSocket, event: &ServerEvent) -> bool {
             tracing::error!(?err, "evento WS não serializou");
             true
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn app_errors_become_error_events_without_internal_detail() {
+        let ServerEvent::Error { code, message } = app_error_event(&AppError::NotFound) else {
+            panic!("esperava ERROR");
+        };
+        assert_eq!((code, message.as_str()), (ErrorCode::NotFound, "não encontrado"));
+
+        let internal = AppError::Internal(anyhow::anyhow!("detalhe secreto"));
+        let ServerEvent::Error { code, message } = app_error_event(&internal) else {
+            panic!("esperava ERROR");
+        };
+        assert_eq!(code, ErrorCode::Internal);
+        assert!(!message.contains("secreto"));
+    }
+
+    #[test]
+    fn heartbeat_timeout_is_two_intervals() {
+        assert_eq!(HEARTBEAT_TIMEOUT, HEARTBEAT_INTERVAL * 2);
+        let ServerEvent::Error { code, message } = error_event(ErrorCode::Validation, "x") else {
+            panic!("esperava ERROR");
+        };
+        assert_eq!((code, message.as_str()), (ErrorCode::Validation, "x"));
     }
 }

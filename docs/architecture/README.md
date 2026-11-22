@@ -13,6 +13,7 @@ um diagrama desatualizado engana mais do que a falta dele.
 | [06-servidores.md](06-servidores.md) | Rotas de servidores, canais, convites e histórico, e o módulo de permissão |
 | [07-websocket.md](07-websocket.md) | Ticket, eventos, inscrição por servidor, presença e o hub de fan-out |
 | [08-client.md](08-client.md) | Sessão no client, reconexão com backoff, histórico e as telas |
+| [../qualidade.md](../qualidade.md) | Portões do CI: análise estática, testes, mutação e dependências |
 | [09-voz.md](09-voz.md) | Token de voz, ponte com o `livekit-client` e a chamada no client (Fase 2, em andamento) |
 
 A visão geral do MVP, com o LiveKit e a hospedagem, está no `Plano de MVP.md`.

@@ -65,7 +65,7 @@ impl Store {
                     if self.is_voice_current(session) {
                         self.drop_voice();
                     }
-                    return self.report(err);
+                    return self.report(&err);
                 }
             };
             if !self.is_voice_current(session) {
@@ -251,14 +251,12 @@ fn storage() -> Option<web_sys::Storage> {
 /// Mute e deaf guardados no navegador (`"muted,deafened"`, com 0 e 1).
 pub fn load_controls() -> VoiceControls {
     let saved = storage().and_then(|s| s.get_item(CONTROLS_KEY).ok().flatten()).unwrap_or_default();
-    let mut flags = saved.split(',').map(|v| v == "1");
-    VoiceControls { muted: flags.next().unwrap_or(false), deafened: flags.next().unwrap_or(false) }
+    VoiceControls::decode(&saved)
 }
 
 fn save_controls(c: VoiceControls) {
     if let Some(s) = storage() {
-        let _ =
-            s.set_item(CONTROLS_KEY, &format!("{},{}", u8::from(c.muted), u8::from(c.deafened)));
+        let _ = s.set_item(CONTROLS_KEY, &c.encode());
     }
 }
 

@@ -30,3 +30,25 @@ pub struct VoiceState {
     pub muted: bool,
     pub deafened: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    use uuid::Uuid;
+
+    use super::*;
+
+    #[test]
+    fn voice_state_wire_format() {
+        let state = VoiceState {
+            guild_id: GuildId(Uuid::nil()),
+            user_id: UserId(Uuid::nil()),
+            channel_id: None,
+            muted: true,
+            deafened: false,
+        };
+        let json = serde_json::to_value(state).unwrap();
+        assert_eq!(json["channel_id"], serde_json::Value::Null, "saída = canal nulo");
+        assert_eq!(json["muted"], true);
+        assert_eq!(serde_json::from_value::<VoiceState>(json).unwrap(), state);
+    }
+}

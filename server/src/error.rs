@@ -65,3 +65,58 @@ impl IntoResponse for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use axum::body::to_bytes;
+
+    use super::*;
+
+    async fn body(err: AppError) -> (StatusCode, serde_json::Value) {
+        let res = err.into_response();
+        let status = res.status();
+        let bytes = to_bytes(res.into_body(), usize::MAX).await.unwrap();
+        (status, serde_json::from_slice(&bytes).unwrap())
+    }
+
+    #[tokio::test]
+    async fn each_error_has_its_status_and_code() {
+        let cases = [
+            (AppError::Validation("x"), StatusCode::UNPROCESSABLE_ENTITY, "validation"),
+            (AppError::UsernameTaken, StatusCode::CONFLICT, "username_taken"),
+            (AppError::InvalidCredentials, StatusCode::UNAUTHORIZED, "invalid_credentials"),
+            (AppError::Unauthorized, StatusCode::UNAUTHORIZED, "unauthorized"),
+            (AppError::Forbidden("y"), StatusCode::FORBIDDEN, "forbidden"),
+            (AppError::NotFound, StatusCode::NOT_FOUND, "not_found"),
+        ];
+        for (err, status, code) in cases {
+            let message = err.to_string();
+            let (got_status, json) = body(err).await;
+            assert_eq!(got_status, status, "{code}");
+            assert_eq!(json["code"], code);
+            assert_eq!(json["message"], message, "a mensagem é a do erro");
+        }
+    }
+
+    #[tokio::test]
+    async fn internal_errors_hide_the_detail() {
+        let err = AppError::Internal(anyhow::anyhow!("senha do banco: hunter2"));
+        assert_eq!(err.code(), ErrorCode::Internal);
+        let (status, json) = body(err).await;
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(json["message"], "erro interno do servidor");
+        assert!(!json.to_string().contains("hunter2"));
+    }
+
+    #[test]
+    fn database_errors_become_internal() {
+        let err = AppError::from(sqlx::Error::RowNotFound);
+        assert_eq!(err.code(), ErrorCode::Internal);
+    }
+
+    #[test]
+    fn validation_message_is_shown_as_is() {
+        assert_eq!(AppError::Validation("nome curto").to_string(), "nome curto");
+        assert_eq!(AppError::Forbidden("só o dono").to_string(), "só o dono");
+    }
+}

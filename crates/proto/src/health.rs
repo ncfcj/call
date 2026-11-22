@@ -15,3 +15,17 @@ pub enum HealthStatus {
     Ok,
     Degraded,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn health_wire_format() {
+        let json = r#"{"status":"degraded","version":"0.1.0","database":false}"#;
+        let h: HealthResponse = serde_json::from_str(json).unwrap();
+        assert_eq!(h.status, HealthStatus::Degraded);
+        assert!(!h.database);
+        assert_eq!(serde_json::to_string(&h).unwrap(), json);
+    }
+}

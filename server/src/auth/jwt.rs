@@ -34,7 +34,8 @@ impl JwtKeys {
 
     pub fn issue(&self, user: UserId) -> anyhow::Result<String> {
         let now = Utc::now().timestamp();
-        let claims = Claims { sub: user.0, iat: now, exp: now + ACCESS_TTL_SECS as i64 };
+        let claims =
+            Claims { sub: user.0, iat: now, exp: now.saturating_add_unsigned(ACCESS_TTL_SECS) };
         Ok(jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &self.encoding)?)
     }
 

@@ -1,0 +1,10 @@
+# Configuração do cargo-mutants (testes de mutação). Veja docs/qualidade.md.
+
+# Código que só compila para wasm32 (ponte com o navegador): os testes nativos não o alcançam.
+# Ele é coberto pelos testes no navegador de cada etapa.
+exclude_globs = [
+    "crates/voice/src/room.rs",
+    "crates/api-client/src/ws.rs",
+    "web/**",
+    "server/src/main.rs",
+]

@@ -50,6 +50,29 @@ impl From<MessageRow> for Message {
     }
 }
 
+/// De onde a página do histórico começa.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Cursor {
+    Latest,
+    Before(MessageId),
+    After(MessageId),
+}
+
+/// Valida a query do histórico: `limit` de 1 a 100 (padrão 50) e no máximo um cursor.
+fn page(q: &MessagesQuery) -> AppResult<(u32, Cursor)> {
+    let limit = q.limit.unwrap_or(MESSAGES_PAGE_DEFAULT);
+    if !(1..=MESSAGES_PAGE_MAX).contains(&limit) {
+        return Err(AppError::Validation("limit precisa ficar entre 1 e 100"));
+    }
+    let cursor = match (q.before, q.after) {
+        (Some(_), Some(_)) => return Err(AppError::Validation("use before ou after, não os dois")),
+        (Some(before), None) => Cursor::Before(before),
+        (None, Some(after)) => Cursor::After(after),
+        (None, None) => Cursor::Latest,
+    };
+    Ok((limit, cursor))
+}
+
 const SELECT_MESSAGE: &str = "SELECT m.id, m.channel_id, m.content, m.created_at, m.edited_at,
         u.id AS author_id, u.username, u.display_name
     FROM messages m LEFT JOIN users u ON u.id = m.author_id";
@@ -77,16 +100,10 @@ pub async fn list(
     Query(q): Query<MessagesQuery>,
 ) -> AppResult<Json<Vec<Message>>> {
     text_channel(&state, channel, user).await?;
-    let limit = q.limit.unwrap_or(MESSAGES_PAGE_DEFAULT);
-    if !(1..=MESSAGES_PAGE_MAX).contains(&limit) {
-        return Err(AppError::Validation("limit precisa ficar entre 1 e 100"));
-    }
+    let (limit, cursor) = page(&q)?;
 
-    let rows: Vec<MessageRow> = match (q.before, q.after) {
-        (Some(_), Some(_)) => {
-            return Err(AppError::Validation("use before ou after, não os dois"));
-        }
-        (None, Some(after)) => {
+    let rows: Vec<MessageRow> = match cursor {
+        Cursor::After(after) => {
             let sql = format!(
                 "{SELECT_MESSAGE} WHERE m.channel_id = $1 AND m.id > $2 ORDER BY m.id LIMIT $3"
             );
@@ -97,7 +114,11 @@ pub async fn list(
                 .fetch_all(&state.db)
                 .await?
         }
-        (before, None) => {
+        Cursor::Latest | Cursor::Before(_) => {
+            let before = match cursor {
+                Cursor::Before(id) => Some(id),
+                _ => None,
+            };
             // As mais novas primeiro para o LIMIT cortar as antigas; depois inverte.
             let sql = format!(
                 "{SELECT_MESSAGE} WHERE m.channel_id = $1 AND ($2::uuid IS NULL OR m.id < $2)
@@ -146,4 +167,71 @@ pub async fn create(
     let message = Message::from(row);
     state.hub.publish(access.guild.guild_id, &ServerEvent::MessageCreate(message.clone()), None);
     Ok((StatusCode::CREATED, Json(message)))
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::TimeZone;
+
+    use super::*;
+
+    fn id(n: u128) -> MessageId {
+        MessageId(Uuid::from_u128(n))
+    }
+
+    #[test]
+    fn page_defaults_to_the_latest_50() {
+        assert_eq!(page(&MessagesQuery::default()).unwrap(), (50, Cursor::Latest));
+    }
+
+    #[test]
+    fn page_accepts_one_cursor_and_limits_from_1_to_100() {
+        let q = MessagesQuery { before: Some(id(1)), after: None, limit: Some(1) };
+        assert_eq!(page(&q).unwrap(), (1, Cursor::Before(id(1))));
+        let q = MessagesQuery { before: None, after: Some(id(2)), limit: Some(100) };
+        assert_eq!(page(&q).unwrap(), (100, Cursor::After(id(2))));
+    }
+
+    #[test]
+    fn page_rejects_bad_limits_and_two_cursors() {
+        for limit in [0, 101, u32::MAX] {
+            let q = MessagesQuery { limit: Some(limit), ..Default::default() };
+            assert!(matches!(page(&q), Err(AppError::Validation(_))), "limit {limit}");
+        }
+        let q = MessagesQuery { before: Some(id(1)), after: Some(id(2)), limit: None };
+        assert!(matches!(page(&q), Err(AppError::Validation(_))));
+    }
+
+    fn row(author: (Option<u128>, Option<&str>, Option<&str>)) -> MessageRow {
+        MessageRow {
+            id: Uuid::from_u128(5),
+            channel_id: Uuid::from_u128(6),
+            content: "oi".into(),
+            created_at: Utc.timestamp_opt(1_800_000_000, 0).unwrap(),
+            edited_at: None,
+            author_id: author.0.map(Uuid::from_u128),
+            username: author.1.map(Into::into),
+            display_name: author.2.map(Into::into),
+        }
+    }
+
+    #[test]
+    fn row_with_author_becomes_a_message() {
+        let m = Message::from(row((Some(9), Some("ana"), Some("Ana"))));
+        assert_eq!(m.id, id(5));
+        assert_eq!(m.channel_id, ChannelId(Uuid::from_u128(6)));
+        assert_eq!(m.content, "oi");
+        let author = m.author.unwrap();
+        assert_eq!(
+            (author.id, author.username.as_str(), author.display_name.as_str()),
+            (UserId(Uuid::from_u128(9)), "ana", "Ana")
+        );
+    }
+
+    #[test]
+    fn deleted_author_becomes_none() {
+        assert!(Message::from(row((None, None, None))).author.is_none());
+        // Linha incompleta (não deveria acontecer) também vira "conta apagada".
+        assert!(Message::from(row((Some(9), None, Some("Ana")))).author.is_none());
+    }
 }

@@ -1,17 +1,47 @@
+# Portões de qualidade. Um PR só pode ir para a main com o check "ci-ok" verde, e ele só fica
+# verde se todos os jobs abaixo passarem. Veja docs/qualidade.md.
 name: CI
 
 on:
   push:
     branches: [main]
   pull_request:
+  # Teste de mutação completo toda segunda de manhã (o dos PRs olha só as linhas alteradas).
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  DATABASE_URL: postgres://call:call@localhost:5432/call
 
 jobs:
-  check:
+  # Formatação e análise estática (clippy com as regras de [workspace.lints]), nos dois alvos.
+  lint:
     runs-on: ubuntu-latest
-    # Os testes de integração (#[sqlx::test]) criam um banco por teste neste Postgres.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - name: Clippy (servidor e crates, alvo nativo)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Clippy (client, alvo do navegador)
+        run: cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
+
+  # Todos os testes (unitários e de integração com Postgres) precisam passar. Mede a cobertura.
+  test:
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:17
@@ -26,21 +56,115 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
-    env:
-      DATABASE_URL: postgres://call:call@localhost:5432/call
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+      - name: Testes com cobertura
+        run: cargo llvm-cov --workspace --lcov --output-path lcov.info
+      - name: Resumo da cobertura
+        run: |
+          {
+            echo '## Cobertura de testes'
+            echo '```'
+            cargo llvm-cov report --summary-only
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-lcov
+          path: lcov.info
+
+  # O client compila para o navegador, em release.
+  web:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - uses: jetli/trunk-action@v0.5.0
-      - run: cargo fmt --all --check
-      # Servidor e crates compartilhados, no alvo nativo
-      - run: cargo clippy -p proto -p call-server --all-targets -- -D warnings
-      - run: cargo test -p proto -p call-server -p call-core -p api-client -p voice
-      # Client, no alvo do navegador
-      - run: cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
       - working-directory: web
         run: trunk build --release
+
+  # Dependências: vulnerabilidades conhecidas (RustSec), licenças, crates banidos e origens.
+  supply-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories bans licenses sources
+
+  # Teste de mutação: muda o código de propósito e exige que algum teste falhe.
+  # Em PRs, só nas linhas alteradas; no agendamento semanal, no workspace inteiro.
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: call
+          POSTGRES_PASSWORD: call
+          POSTGRES_DB: call
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U call -d call"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+      - name: Mutação nas linhas alteradas pelo PR
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD > pr.diff
+          cargo mutants --workspace --in-diff pr.diff --no-shuffle -j 2 --timeout 300
+      - name: Mutação completa
+        if: github.event_name != 'pull_request'
+        run: cargo mutants --workspace --no-shuffle -j 2 --timeout 300
+      - name: Sobreviventes
+        if: failure()
+        run: |
+          echo '## Mutações que sobreviveram' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Cada uma é um comportamento que nenhum teste verifica.' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat mutants.out/missed.txt mutants.out/timeout.txt 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants
+          path: mutants.out
+          if-no-files-found: ignore
+
+  # Check único para a proteção de branch: só passa com todos os outros verdes.
+  ci-ok:
+    if: always()
+    needs: [lint, test, web, supply-chain, mutation]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Todos os portões passaram
+        run: |
+          echo 'lint=${{ needs.lint.result }} test=${{ needs.test.result }} web=${{ needs.web.result }}'
+          echo 'supply-chain=${{ needs.supply-chain.result }} mutation=${{ needs.mutation.result }}'
+          test '${{ needs.lint.result }}' = success
+          test '${{ needs.test.result }}' = success
+          test '${{ needs.web.result }}' = success
+          test '${{ needs.supply-chain.result }}' = success
+          test '${{ needs.mutation.result }}' = success

@@ -1,5 +1,6 @@
 //! Voz na barra de canais: o canal clicável, quem está nele e o painel da chamada.
 
+use call_core::ui::device_options;
 use leptos::{prelude::*, task::spawn_local};
 use proto::{Channel, UserId};
 use uuid::Uuid;
@@ -244,17 +245,8 @@ fn AudioSettings(open: RwSignal<bool>) -> impl IntoView {
     };
     refresh();
 
-    // "default" é o padrão do sistema, que já é a primeira opção; não repete.
     let options = |list: &[voice::AudioDevice], noun: &str| {
-        list.iter()
-            .filter(|d| d.id != "default")
-            .enumerate()
-            .map(|(i, d)| {
-                let label =
-                    if d.label.is_empty() { format!("{noun} {}", i + 1) } else { d.label.clone() };
-                (d.id.clone(), label)
-            })
-            .collect::<Vec<_>>()
+        device_options(list.iter().map(|d| (d.id.as_str(), d.label.as_str())), noun)
     };
     let chosen = |v: String| (!v.is_empty()).then_some(v);
 

@@ -209,17 +209,7 @@ impl ApiClient {
     // --- Mensagens --------------------------------------------------------------------------
 
     pub async fn messages(&self, channel: ChannelId, q: &MessagesQuery) -> ApiResult<Vec<Message>> {
-        let mut path = format!("/channels/{channel}/messages?");
-        if let Some(before) = q.before {
-            path.push_str(&format!("before={before}&"));
-        }
-        if let Some(after) = q.after {
-            path.push_str(&format!("after={after}&"));
-        }
-        if let Some(limit) = q.limit {
-            path.push_str(&format!("limit={limit}"));
-        }
-        self.get(&path).await
+        self.get(&messages_path(channel, q)).await
     }
 
     pub async fn send_message(&self, channel: ChannelId, content: &str) -> ApiResult<Message> {
@@ -248,6 +238,22 @@ impl ApiClient {
     }
 }
 
+/// `/channels/{id}/messages` com a query só dos campos presentes.
+fn messages_path(channel: ChannelId, q: &MessagesQuery) -> String {
+    let mut params = Vec::new();
+    if let Some(before) = q.before {
+        params.push(format!("before={before}"));
+    }
+    if let Some(after) = q.after {
+        params.push(format!("after={after}"));
+    }
+    if let Some(limit) = q.limit {
+        params.push(format!("limit={limit}"));
+    }
+    let path = format!("/channels/{channel}/messages");
+    if params.is_empty() { path } else { format!("{path}?{}", params.join("&")) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,5 +265,53 @@ mod tests {
             "ws://localhost:3000/ws?ticket=t"
         );
         assert_eq!(ApiClient::new("https://api.x.dev").ws_url("t"), "wss://api.x.dev/ws?ticket=t");
+    }
+
+    #[test]
+    fn base_url_loses_the_trailing_slash() {
+        assert_eq!(ApiClient::new("http://x:3000///").base_url(), "http://x:3000");
+    }
+
+    #[test]
+    fn messages_path_has_only_the_given_fields() {
+        let channel = ChannelId(uuid::Uuid::nil());
+        let base = "/channels/00000000-0000-0000-0000-000000000000/messages";
+        assert_eq!(messages_path(channel, &MessagesQuery::default()), base);
+        let id = proto::MessageId(uuid::Uuid::from_u128(1));
+        let q = MessagesQuery { before: Some(id), after: None, limit: Some(50) };
+        assert_eq!(
+            messages_path(channel, &q),
+            format!("{base}?before=00000000-0000-0000-0000-000000000001&limit=50")
+        );
+        let q = MessagesQuery { before: None, after: Some(id), limit: None };
+        assert_eq!(
+            messages_path(channel, &q),
+            format!("{base}?after=00000000-0000-0000-0000-000000000001")
+        );
+    }
+
+    #[test]
+    fn only_401_means_the_session_ended() {
+        let api = |status, code| ApiError::Api {
+            status,
+            body: ErrorResponse { code, message: "x".into() },
+        };
+        assert!(api(401, proto::ErrorCode::Unauthorized).is_unauthorized());
+        assert!(ApiError::Status(401).is_unauthorized());
+        assert!(!api(403, proto::ErrorCode::Forbidden).is_unauthorized());
+        assert!(!ApiError::Status(500).is_unauthorized());
+    }
+
+    #[test]
+    fn api_error_shows_the_server_message() {
+        let err = ApiError::Api {
+            status: 422,
+            body: ErrorResponse {
+                code: proto::ErrorCode::Validation,
+                message: "nome curto".into(),
+            },
+        };
+        assert_eq!(err.to_string(), "nome curto");
+        assert_eq!(ApiError::Status(502).to_string(), "a API respondeu 502");
     }
 }

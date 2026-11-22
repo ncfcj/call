@@ -61,4 +61,27 @@ mod tests {
         typing.prune(9_000.0);
         assert_eq!(typing, Typing::default());
     }
+
+    #[test]
+    fn notice_expires_exactly_after_the_ttl() {
+        let channel = ChannelId(Uuid::from_u128(1));
+        let ana = UserId(Uuid::from_u128(10));
+        let mut typing = Typing::default();
+        typing.start(channel, ana, 1_000.0);
+        assert_eq!(typing.active(channel, 8_999.0), [ana]);
+        assert!(typing.active(channel, 9_000.0).is_empty(), "vence no instante exato");
+    }
+
+    #[test]
+    fn prune_keeps_the_notices_still_valid() {
+        let channel = ChannelId(Uuid::from_u128(1));
+        let (ana, bia) = (UserId(Uuid::from_u128(10)), UserId(Uuid::from_u128(11)));
+        let mut typing = Typing::default();
+        typing.start(channel, ana, 0.0);
+        typing.start(channel, bia, 4_000.0);
+        typing.prune(8_000.0);
+        assert_eq!(typing.active(channel, 8_000.0), [bia], "o da ana venceu em 8 s");
+        typing.prune(1_000.0);
+        assert_eq!(typing.active(channel, 1_000.0), [bia], "prune não apaga o que ainda vale");
+    }
 }

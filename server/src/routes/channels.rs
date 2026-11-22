@@ -96,3 +96,15 @@ pub async fn delete(
     super::voice::publish_voice(&state, state.voice_states.clear_channel(channel));
     Ok(StatusCode::NO_CONTENT)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_name_is_trimmed_and_validated() {
+        assert_eq!(clean_name(" jogos ").unwrap(), "jogos");
+        assert!(matches!(clean_name(""), Err(AppError::Validation(_))));
+        assert!(matches!(clean_name(&"a".repeat(101)), Err(AppError::Validation(_))));
+    }
+}
