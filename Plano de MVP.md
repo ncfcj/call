@@ -225,6 +225,26 @@ Impactos a considerar antes de escolher:
 
 Pronto quando: o nível escolhido está implementado, um dump do banco não revela o texto das mensagens, e (no nível B) o SFU encaminha áudio que ele mesmo não consegue decifrar.
 
+## Ideias para o futuro (opcionais, sem data)
+
+Conceitos anotados para revisitar depois do MVP. Nenhum está planejado nem tem implementação decidida.
+
+### Controle remoto do computador compartilhado (estilo AnyDesk e TeamViewer)
+
+Quem compartilha a tela pode dar a outra pessoa o controle do mouse e do teclado do seu computador, dentro de uma chamada.
+
+- Depende de compartilhamento de tela, que está fora do MVP.
+- O host precisa autorizar cada sessão de controle e poder revogar na hora.
+- Exige o app desktop (Tauri) no host: o navegador não consegue injetar mouse e teclado no sistema.
+
+### Jogo e controle remoto (estilo Parsec)
+
+O convidado usa o próprio controle (gamepad), mouse e teclado, e o programa envia esses comandos ao host, que os aplica como se fossem um controle local. A ideia é jogar junto um jogo que roda só na máquina do host.
+
+- Precisa de vídeo com latência muito baixa e taxa de quadros alta, bem mais exigente que a voz.
+- No host, precisa de um controle virtual para o sistema reconhecer o gamepad remoto.
+- Também exige o app desktop no host e a autorização explícita dele.
+
 ## Decisões tomadas na implementação
 
 O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs/architecture/`.
