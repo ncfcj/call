@@ -80,14 +80,11 @@ cargo mutants -p call-core -j 3
 
 ## Bloquear o merge sem o CI verde
 
-O GitHub só impede o merge com a **proteção de branch** (ou um ruleset) exigindo o check
-`ci-ok`. Em repositório **privado** de conta gratuita esse recurso não existe; as opções são:
+O repositório é **público** (2026-11-22), o que deixa a proteção de branch gratuita. A `main` exige:
 
-1. Assinar o **GitHub Pro** (pago) e ativar a proteção da `main`.
-2. Tornar o repositório **público**: a proteção fica gratuita, e também o CodeQL e o SonarQube
-   Cloud.
-3. Manter privado e gratuito: o CI continua marcando o PR em vermelho, mas o botão de merge não
-   é bloqueado. A regra vira disciplina.
+- o check `ci-ok` verde para o merge;
+- PR antes do merge (sem aprovação obrigatória: quem trabalha sozinho não aprova o próprio PR);
+- as regras valem também para administradores, e não há force push nem exclusão da branch.
 
-Com a proteção disponível, exija na `main`: o check `ci-ok`, PR antes do merge, branch
-atualizada com a `main` e nenhum push direto.
+Para conferir ou mudar: Settings > Branches no GitHub, ou
+`gh api repos/ncfcj/call/branches/main/protection`.

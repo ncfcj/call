@@ -235,7 +235,7 @@ se todos passarem.
 - [x] Testes de mutação (`cargo-mutants`): nas linhas alteradas de cada PR e no workspace inteiro toda semana
 - [x] Dependências: vulnerabilidades (RustSec), licenças, crates banidos e origens (`cargo-deny`)
 - [x] Atualizações automáticas de dependências e Actions (Dependabot)
-- [ ] Bloquear o merge sem o `ci-ok` verde: exige proteção de branch, que em repositório privado só existe no GitHub Pro (ou tornando o repositório público)
+- [x] Bloquear o merge sem o `ci-ok` verde: repositório público e proteção da `main` (check `ci-ok`, PR obrigatório, vale para administradores)
 
 Próximas etapas sugeridas, em ordem de custo-benefício:
 
@@ -304,7 +304,6 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
 - **`chrono` sem manutenção (RUSTSEC-2026-0543):** vem do `sqlx` e da `livekit-api`; a exceção está no `deny.toml`. Migrar para `time` ou `jiff` quando as dependências permitirem.
-- **Merge sem o CI verde:** sem proteção de branch (repositório privado no plano gratuito), o CI marca o PR em vermelho mas não bloqueia o botão de merge.
 
 ## Riscos técnicos e mitigação
 
