@@ -48,7 +48,7 @@ impl LiveKit {
             can_subscribe: Some(true),
             can_publish_data: Some(false),
             can_publish_sources: vec!["microphone".to_owned()],
-            can_update_own_metadata: Some(false),
+            // can_update_own_metadata fica no padrão do LiveKit, que é não poder.
             ..Default::default()
         };
         // Vale quando é este join que cria a sala.
@@ -109,9 +109,11 @@ mod tests {
         assert_eq!(claims.sub, user().id.to_string());
         assert_eq!(claims.name, "Ana");
         assert_eq!(claims.video.room, channel.to_string());
-        assert!(
-            claims.video.room_join && claims.video.can_publish() && claims.video.can_subscribe()
-        );
+        assert!(claims.video.room_join);
+        // Explícitos no token, sem depender do padrão do servidor do LiveKit.
+        assert_eq!(claims.video.can_publish, Some(true));
+        assert_eq!(claims.video.can_subscribe, Some(true));
+        assert_eq!(claims.video.can_publish_data, Some(false));
         assert!(!claims.video.can_publish_data() && !claims.video.can_update_own_metadata());
         assert_eq!(claims.video.can_publish_sources, ["microphone"]);
         assert!(!claims.video.room_admin && !claims.video.room_create && !claims.video.room_list);

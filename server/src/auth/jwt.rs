@@ -77,4 +77,17 @@ mod tests {
             jsonwebtoken::encode(&Header::new(Algorithm::HS256), &claims, &keys.encoding).unwrap();
         assert_eq!(keys.verify(&token), None);
     }
+
+    #[test]
+    fn access_token_lasts_fifteen_minutes() {
+        let keys = JwtKeys::new(SECRET);
+        let token = keys.issue(UserId(Uuid::now_v7())).unwrap();
+        let mut validation = Validation::new(Algorithm::HS256);
+        validation.validate_exp = false;
+        let claims =
+            jsonwebtoken::decode::<Claims>(&token, &keys.decoding, &validation).unwrap().claims;
+        assert_eq!(ACCESS_TTL_SECS, 15 * 60);
+        assert_eq!(claims.exp - claims.iat, 15 * 60);
+        assert!((claims.iat - Utc::now().timestamp()).abs() <= 5, "emitido agora");
+    }
 }

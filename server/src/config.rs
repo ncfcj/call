@@ -187,9 +187,33 @@ mod tests {
         assert!(load(&v).is_err());
     }
 
-    #[test]
-    fn cors_layer_builds_from_the_origins() {
-        // Só confere que monta sem pânico com as origens configuradas.
-        let _layer = load(&base()).unwrap().cors_layer();
+    async fn preflight(c: &Config, origin: &str) -> Option<String> {
+        use axum::{Router, body::Body, http::Request, routing::post};
+        use tower::ServiceExt;
+        let app = Router::new().route("/auth/login", post(|| async {})).layer(c.cors_layer());
+        let req = Request::builder()
+            .method("OPTIONS")
+            .uri("/auth/login")
+            .header("Origin", origin)
+            .header("Access-Control-Request-Method", "POST")
+            .header("Access-Control-Request-Headers", "content-type,authorization")
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        let get = |name| res.headers().get(name).map(|v| v.to_str().unwrap().to_owned());
+        assert!(
+            get("access-control-allow-origin").is_none()
+                || get("access-control-allow-credentials").as_deref() == Some("true")
+        );
+        get("access-control-allow-origin")
+    }
+
+    #[tokio::test]
+    async fn cors_accepts_only_the_configured_origins_with_credentials() {
+        let c = load(&base()).unwrap();
+        for origin in ["http://localhost:8080", "http://127.0.0.1:8080", "http://[::1]:8080"] {
+            assert_eq!(preflight(&c, origin).await.as_deref(), Some(origin));
+        }
+        assert_eq!(preflight(&c, "https://site-malicioso.example").await, None);
     }
 }

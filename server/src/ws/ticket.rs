@@ -25,9 +25,12 @@ impl Tickets {
     }
 
     pub fn issue(&self, user: UserId) -> String {
+        self.issue_at(user, Instant::now())
+    }
+
+    fn issue_at(&self, user: UserId, now: Instant) -> String {
         let bytes: [u8; 32] = rand::random();
         let ticket = URL_SAFE_NO_PAD.encode(bytes);
-        let now = Instant::now();
         let mut inner = self.inner.lock().unwrap();
         // Limpa os vencidos aqui mesmo: o mapa só cresce com tickets emitidos e não usados.
         inner.retain(|_, (_, expires)| *expires > now);
@@ -37,8 +40,12 @@ impl Tickets {
 
     /// Consome o ticket. Um ticket usado, vencido ou desconhecido devolve `None`.
     pub fn redeem(&self, ticket: &str) -> Option<UserId> {
+        self.redeem_at(ticket, Instant::now())
+    }
+
+    fn redeem_at(&self, ticket: &str, now: Instant) -> Option<UserId> {
         let (user, expires) = self.inner.lock().unwrap().remove(ticket)?;
-        (expires > Instant::now()).then_some(user)
+        (expires > now).then_some(user)
     }
 
     #[cfg(test)]
@@ -71,5 +78,34 @@ mod tests {
         let ticket = tickets.issue(UserId(Uuid::from_u128(1)));
         tickets.expire_all();
         assert_eq!(tickets.redeem(&ticket), None);
+    }
+
+    #[test]
+    fn ticket_expires_exactly_after_the_ttl() {
+        let tickets = Tickets::new();
+        let user = UserId(Uuid::from_u128(1));
+        let t0 = Instant::now();
+        let ticket = tickets.issue_at(user, t0);
+        assert_eq!(
+            tickets.redeem_at(&ticket, t0 + TICKET_TTL - Duration::from_millis(1)),
+            Some(user)
+        );
+        let ticket = tickets.issue_at(user, t0);
+        assert_eq!(tickets.redeem_at(&ticket, t0 + TICKET_TTL), None, "vence no instante exato");
+    }
+
+    #[test]
+    fn issuing_forgets_expired_tickets_but_keeps_valid_ones() {
+        let tickets = Tickets::new();
+        let user = UserId(Uuid::from_u128(1));
+        let t0 = Instant::now();
+        let old = tickets.issue_at(user, t0);
+        let recent = tickets.issue_at(user, t0 + Duration::from_secs(10));
+        // Em t0 + 30 s o primeiro venceu (no instante exato) e o segundo ainda vale.
+        tickets.issue_at(user, t0 + TICKET_TTL);
+        let kept: Vec<String> = tickets.inner.lock().unwrap().keys().cloned().collect();
+        assert!(!kept.contains(&old), "o vencido sai do mapa");
+        assert!(kept.contains(&recent), "o que ainda vale fica");
+        assert_eq!(kept.len(), 2);
     }
 }
