@@ -155,11 +155,11 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 - [x] 2b. Grupo de até 6 pessoas, com indicador de quem está falando. Testado com 6 participantes; o anel acompanha quem fala em menos de 1 s
 - [x] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído). Regras do Discord, atalhos Ctrl+Shift+M e Ctrl+Shift+D; o deaf só aparece para os outros com o webhook
 - [x] Seletor de microfone e fone de saída. Vale no meio da chamada e fica guardado; dispositivo desconectado cai no padrão
-- [ ] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat
+- [x] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat. O client também avisa o canal, o mute e o deaf pelo WS; a saída de uma conexão antiga (outra aba) não tira ninguém da lista
 
 Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conversam sem eco perceptível. Mute e deaf aparecem na barra lateral dos outros em menos de 1 s. Fechar a aba remove o usuário do canal.
 
-**Situação: em andamento.** Branch `fase-2`.
+**Situação: implementada, em validação.** Branch `fase-2`, PR #4. O critério "redes diferentes (4G e Wi-Fi de outra casa)" depende do LiveKit acessível de fora da rede local, e fica para o deploy da Fase 3 (ou um teste com o LiveKit Cloud). Mute e deaf chegam à barra lateral dos outros em poucos milissegundos, e fechar a aba tira a pessoa do canal na hora.
 
 | Etapa | Situação | Teste funcional |
 | --- | --- | --- |
@@ -168,7 +168,7 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 | Grupo e indicador de quem fala | Pronta | Robôs no navegador (6 participantes) |
 | Mute, deaf e detecção de voz | Pronta | Manual, duas janelas (README) |
 | Seletor de dispositivos | Pronta | Manual (README) |
-| Webhook e estado de voz no WebSocket | A fazer | |
+| Webhook e estado de voz no WebSocket | Pronta | Manual, duas janelas (README) |
 
 ### Fase 3: polimento e deploy (cerca de 1 semana)
 

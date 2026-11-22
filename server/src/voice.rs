@@ -2,7 +2,11 @@
 
 use std::time::Duration;
 
-use livekit_api::access_token::{AccessToken, VideoGrants};
+use livekit_api::{
+    access_token::{AccessToken, TokenVerifier, VideoGrants},
+    webhooks::WebhookReceiver,
+};
+use livekit_protocol::WebhookEvent;
 use proto::{ChannelId, User};
 
 /// Validade do token para entrar na sala. Curta: só precisa durar até o client conectar.
@@ -60,5 +64,20 @@ impl LiveKit {
             .with_room_config(room)
             .to_jwt()
             .map_err(|err| anyhow::anyhow!("não assinou o token do LiveKit: {err}"))
+    }
+
+    /// Confere a assinatura de um webhook do LiveKit (JWT no `Authorization` com o SHA-256 do
+    /// corpo, assinado com a mesma chave) e devolve o evento.
+    pub fn receive_webhook(&self, body: &str, authorization: &str) -> Option<WebhookEvent> {
+        let token = authorization.strip_prefix("Bearer ").unwrap_or(authorization);
+        let receiver =
+            WebhookReceiver::new(TokenVerifier::with_api_key(&self.api_key, &self.api_secret));
+        match receiver.receive(body, token) {
+            Ok(event) => Some(event),
+            Err(err) => {
+                tracing::warn!(error = %err, "webhook do LiveKit recusado");
+                None
+            }
+        }
     }
 }

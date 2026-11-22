@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use crate::{
     auth::jwt::JwtKeys,
     voice::LiveKit,
+    voice_state::VoiceStates,
     ws::{hub::Hub, ticket::Tickets},
 };
 
@@ -20,6 +21,7 @@ pub struct AppState {
     pub tickets: Arc<Tickets>,
     pub hub: Arc<Hub>,
     pub livekit: Arc<LiveKit>,
+    pub voice_states: Arc<VoiceStates>,
 }
 
 impl AppState {
@@ -38,6 +40,7 @@ impl AppState {
             tickets: Arc::new(Tickets::new()),
             hub: Arc::new(Hub::new()),
             livekit: Arc::new(livekit),
+            voice_states: Arc::new(VoiceStates::new()),
         }
     }
 }

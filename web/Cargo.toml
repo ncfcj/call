@@ -16,5 +16,6 @@ gloo-timers = { version = "0.3", features = ["futures"] }
 js-sys = "0.3"
 leptos.workspace = true
 proto.workspace = true
+uuid.workspace = true
 voice.workspace = true
 web-sys = { version = "0.3", features = ["Storage", "KeyboardEvent"] }

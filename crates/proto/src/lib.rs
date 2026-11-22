@@ -21,5 +21,5 @@ pub use guild::{
 pub use health::{HealthResponse, HealthStatus};
 pub use ids::{ChannelId, GuildId, MessageId, UserId};
 pub use message::{CreateMessageRequest, Message, MessagesQuery};
-pub use voice::VoiceTokenResponse;
+pub use voice::{VoiceState, VoiceTokenResponse};
 pub use ws::{ClientEvent, PresenceStatus, ServerEvent, WsQuery, WsTicketResponse};

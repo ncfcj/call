@@ -98,13 +98,31 @@ impl Store {
                     v.status = VoiceStatus::Connected;
                 }
             });
+            self.send_voice_state();
+        });
+    }
+
+    /// Avisa o servidor do canal de voz (só depois de conectado ao LiveKit) e do mute e deaf.
+    pub fn send_voice_state(self) {
+        let channel_id = self.voice.with_untracked(|v| {
+            v.as_ref().filter(|v| v.status != VoiceStatus::Connecting).map(|v| v.channel)
+        });
+        let controls = self.voice_controls.get_untracked();
+        self.send_ws(proto::ClientEvent::VoiceStateUpdate {
+            channel_id,
+            muted: controls.muted,
+            deafened: controls.deafened,
         });
     }
 
     /// Sai da chamada, se estiver numa.
     pub fn leave_voice(self) {
         self.voice_session.update_value(|s| *s += 1);
+        let was_in_call = self.voice.with_untracked(Option::is_some);
         self.voice.set(None);
+        if was_in_call {
+            self.send_voice_state();
+        }
         if let Some(room) = self.voice_room.get_value() {
             self.voice_room.set_value(None);
             spawn_local(async move { room.disconnect().await });
@@ -125,6 +143,7 @@ impl Store {
     fn apply_controls(self) {
         let controls = self.voice_controls.get_untracked();
         save_controls(controls);
+        self.send_voice_state();
         let Some(room) = self.voice_room.get_value() else { return };
         room.set_deafened(controls.deafened);
         spawn_local(async move {
@@ -172,6 +191,7 @@ impl Store {
         self.voice_session.update_value(|s| *s += 1);
         self.voice.set(None);
         self.voice_room.set_value(None);
+        self.send_voice_state();
     }
 
     fn on_voice_event(self, session: u64, event: VoiceEvent) {

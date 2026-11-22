@@ -57,6 +57,9 @@ pub struct Store {
     pub voice_controls: RwSignal<VoiceControls>,
     /// Microfone e saída de áudio escolhidos, guardados no navegador.
     pub audio_prefs: RwSignal<crate::voice::AudioPrefs>,
+    /// Quem está na voz em cada servidor, vindo do servidor (webhook do LiveKit e avisos dos
+    /// clients). É o que mostra quem está num canal para quem não está nele.
+    pub voice_states: RwSignal<HashMap<GuildId, HashMap<UserId, proto::VoiceState>>>,
 }
 
 impl Store {
@@ -84,6 +87,7 @@ impl Store {
             voice_session: StoredValue::new(0),
             voice_controls: RwSignal::new(crate::voice::load_controls()),
             audio_prefs: RwSignal::new(crate::voice::load_prefs()),
+            voice_states: RwSignal::new(HashMap::new()),
         }
     }
 
@@ -151,6 +155,7 @@ impl Store {
         self.channels.set(HashMap::new());
         self.members.set(HashMap::new());
         self.online.set(HashMap::new());
+        self.voice_states.set(HashMap::new());
         self.logs.set(HashMap::new());
         self.unread.set(HashSet::new());
         self.typing.set(Typing::default());
@@ -220,6 +225,8 @@ impl Store {
             self.send_ws(ClientEvent::Subscribe { guild_id: guild.id });
         }
         self.online.set(HashMap::new());
+        // Diz ao servidor onde está na voz (se ele reiniciou, é assim que fica sabendo).
+        self.send_voice_state();
         let channels: Vec<ChannelId> =
             self.logs.with_untracked(|logs| logs.keys().copied().collect());
         for channel in channels {
@@ -481,9 +488,29 @@ impl Store {
     pub fn apply(self, event: ServerEvent) {
         match event {
             ServerEvent::Hello { .. } | ServerEvent::HeartbeatAck => {}
-            ServerEvent::Subscribed { guild_id, online } => self.online.update(|o| {
-                o.insert(guild_id, online.into_iter().collect());
-            }),
+            ServerEvent::Subscribed { guild_id, online, voice } => {
+                self.online.update(|o| {
+                    o.insert(guild_id, online.into_iter().collect());
+                });
+                for state in &voice {
+                    self.ensure_member(guild_id, state.user_id);
+                }
+                self.voice_states.update(|v| {
+                    v.insert(guild_id, voice.into_iter().map(|s| (s.user_id, s)).collect());
+                });
+            }
+            ServerEvent::VoiceStateUpdate(state) => {
+                if state.channel_id.is_some() {
+                    self.ensure_member(state.guild_id, state.user_id);
+                }
+                self.voice_states.update(|v| {
+                    let guild = v.entry(state.guild_id).or_default();
+                    match state.channel_id {
+                        Some(_) => guild.insert(state.user_id, state),
+                        None => guild.remove(&state.user_id),
+                    };
+                });
+            }
             ServerEvent::PresenceUpdate { guild_id, user_id, status } => {
                 let known = self.members.with_untracked(|m| {
                     m.get(&guild_id).is_some_and(|list| list.iter().any(|x| x.user.id == user_id))
@@ -534,6 +561,16 @@ impl Store {
             ServerEvent::Error { message, .. } => {
                 leptos::logging::warn!("WS recusou um evento: {message}");
             }
+        }
+    }
+
+    /// Recarrega os membros se `user` ainda não está na lista (entrou depois que ela foi carregada).
+    fn ensure_member(self, guild: GuildId, user: UserId) {
+        let known = self.members.with_untracked(|m| {
+            m.get(&guild).is_none_or(|list| list.iter().any(|x| x.user.id == user))
+        });
+        if !known {
+            self.load_members(guild);
         }
     }
 

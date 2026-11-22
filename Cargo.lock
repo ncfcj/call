@@ -3927,6 +3927,7 @@ dependencies = [
  "js-sys",
  "leptos",
  "proto",
+ "uuid",
  "voice",
  "web-sys",
 ]

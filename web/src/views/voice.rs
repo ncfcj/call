@@ -1,28 +1,87 @@
 //! Voz na barra de canais: o canal clicável, quem está nele e o painel da chamada.
 
 use leptos::{prelude::*, task::spawn_local};
-use proto::Channel;
+use proto::{Channel, UserId};
+use uuid::Uuid;
 
 use crate::{
     store::Store,
     voice::{VoiceState, VoiceStatus},
 };
 
-/// Um canal de voz. Clicar entra na chamada; quem está nela aparece logo abaixo.
+/// Uma pessoa na lista de um canal de voz.
+#[derive(Clone, PartialEq)]
+struct Row {
+    key: String,
+    name: String,
+    speaking: bool,
+    muted: bool,
+    deafened: bool,
+}
+
+/// Um canal de voz. Clicar entra na chamada; quem está nele aparece logo abaixo, para todos os
+/// membros do servidor.
 #[component]
 pub fn VoiceChannel(channel: Channel) -> impl IntoView {
     let store = expect_context::<Store>();
     let id = channel.id;
     let guild = channel.guild_id;
     let here = move || store.in_voice_channel(id);
-    let participants = move || {
-        store.voice.with(|v| match v {
-            Some(v) if v.channel == id => v
-                .participants
-                .iter()
-                .map(|p| (p.clone(), v.speaking.contains(&p.identity)))
-                .collect(),
-            _ => Vec::new(),
+
+    let rows = move || {
+        // Mute e deaf de cada um, pelo servidor (o LiveKit não sabe do deaf dos outros).
+        let flags = |user: Option<UserId>| {
+            user.and_then(|u| {
+                store.voice_states.with(|v| v.get(&guild)?.get(&u).map(|s| (s.muted, s.deafened)))
+            })
+        };
+        let mine = store.voice_controls.get();
+        let in_room = store.voice.with(|v| match v {
+            // Na chamada: a sala do LiveKit, que é a mais atual, com quem está falando.
+            Some(v) if v.channel == id => Some(
+                v.participants
+                    .iter()
+                    .map(|p| {
+                        let user = Uuid::parse_str(&p.identity).ok().map(UserId);
+                        let (muted, deafened) = if p.local {
+                            (!mine.mic_open(), mine.deafened)
+                        } else {
+                            let (m, d) = flags(user).unwrap_or((false, false));
+                            (m || !p.mic, d)
+                        };
+                        Row {
+                            key: p.identity.clone(),
+                            name: p.name.clone(),
+                            speaking: v.speaking.contains(&p.identity),
+                            muted,
+                            deafened,
+                        }
+                    })
+                    .collect::<Vec<_>>(),
+            ),
+            _ => None,
+        });
+        in_room.unwrap_or_else(|| {
+            // Fora da chamada: o que o servidor sabe.
+            let mut list: Vec<Row> = store.voice_states.with(|v| {
+                v.get(&guild)
+                    .map(|states| {
+                        states
+                            .values()
+                            .filter(|s| s.channel_id == Some(id))
+                            .map(|s| Row {
+                                key: s.user_id.to_string(),
+                                name: store.display_name(guild, s.user_id),
+                                speaking: false,
+                                muted: s.muted,
+                                deafened: s.deafened,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            });
+            list.sort_by(|a, b| a.name.cmp(&b.name));
+            list
         })
     };
 
@@ -37,22 +96,20 @@ pub fn VoiceChannel(channel: Channel) -> impl IntoView {
         </button>
         <ul class="voice-members">
             {move || {
-                participants()
+                rows()
                     .into_iter()
-                    .map(|(p, speaking)| {
-                        // O deaf dos outros só aparece com o estado de voz no WebSocket.
-                        let deaf = p.local && store.voice_controls.with(|c| c.deafened);
-                        let icon = if deaf {
+                    .map(|row| {
+                        let icon = if row.deafened {
                             Some(("Sem som e sem microfone", "🎧✕"))
-                        } else if !p.mic {
+                        } else if row.muted {
                             Some(("Microfone fechado", "🔇"))
                         } else {
                             None
                         };
                         view! {
-                            <li class:speaking=speaking class:muted=!p.mic>
+                            <li class:speaking=row.speaking class:muted=row.muted data-user=row.key>
                                 <span class="voice-dot"></span>
-                                {p.name}
+                                {row.name}
                                 {icon.map(|(title, text)| view! { <span class="mic-off" title=title>{text}</span> })}
                             </li>
                         }

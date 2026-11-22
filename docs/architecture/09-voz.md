@@ -1,6 +1,6 @@
 # Voz
 
-Fase 2, em andamento. O áudio nunca passa pelo call-server: ele só confere a permissão e assina
+Fase 2. O áudio nunca passa pelo call-server: ele só confere a permissão e assina
 um token, e o client conecta direto ao LiveKit (SFU) por WebRTC.
 
 ## Token de entrada
@@ -134,10 +134,51 @@ classDiagram
 - **Sessão de voz numerada:** cada entrada incrementa um número; eventos de uma sala antiga que
   ainda está fechando são ignorados.
 
-Por enquanto, quem está numa sala só é visível para quem também está nela. O mapa de voz para
-todos os membros chega com o webhook do LiveKit.
+## Quem está em cada canal, para todos
 
-## Próximas etapas
+Todos os membros de um servidor veem, embaixo de cada canal de voz, quem está nele, com o mute
+e o deaf, mesmo fora da chamada. O estado vive em memória no servidor (`VoiceStates`, em
+`server/src/voice_state.rs`) e chega pelo WebSocket do chat.
 
-- Teste em redes diferentes (4G e Wi-Fi de outra casa).
-- Webhook do LiveKit e o estado de voz difundido pelo WebSocket do chat.
+```mermaid
+sequenceDiagram
+    participant B as Client da Bia
+    participant LK as LiveKit
+    participant A as call-server
+    participant O as Client da Ana (fora da chamada)
+    B->>LK: entra na sala (WebRTC)
+    LK->>A: POST /livekit/webhook participant_joined (JWT com SHA-256 do corpo)
+    A->>A: VoiceStates.join(canal, Bia, sid)
+    A-->>O: VOICE_STATE_UPDATE {channel_id, muted, deafened}
+    B->>A: VOICE_STATE_UPDATE {channel_id, muted: true} (WebSocket)
+    A-->>O: VOICE_STATE_UPDATE muted
+    B->>LK: fecha a aba
+    LK->>A: participant_left (mesmo sid)
+    A-->>O: VOICE_STATE_UPDATE {channel_id: null}
+```
+
+- **Duas fontes.** O webhook do LiveKit é a fonte da verdade para entrar e sair: é ele que tira
+  da lista quem fechou a aba ou perdeu a conexão. O client avisa pelo WebSocket o mute e o deaf
+  (o LiveKit não manda webhook para isso) e o canal em que está, só depois de conectado. Esse
+  aviso repõe o mapa quando o servidor reinicia: ao reconectar o WebSocket, cada client em
+  chamada diz onde está.
+- **Saída pela conexão certa.** Cada entrada pelo webhook guarda o `sid` da conexão no LiveKit, e
+  a saída só vale para o mesmo `sid`. Se a mesma pessoa entra por outra aba, o LiveKit derruba a
+  primeira, mas a saída da aba antiga não a tira da lista. Pelo mesmo motivo, o aviso "saí" do
+  client só tira um lugar que veio do próprio client, não do webhook.
+- **Eventos:** o `SUBSCRIBED` traz `voice` (todos na voz daquele servidor), e cada mudança chega
+  como `VOICE_STATE_UPDATE`, com `channel_id: null` na saída. Sair do servidor ou apagar o canal
+  também tira a pessoa da lista.
+- **Na chamada,** a lista vem da sala do LiveKit (mais atual, com o anel de quem fala), e o mute
+  e o deaf dos outros vêm do servidor.
+- **Webhook:** `POST /livekit/webhook`, conferido com a mesma chave do LiveKit (401 sem a
+  assinatura certa). No `docker compose`, o LiveKit manda para
+  `http://host.docker.internal:3000/livekit/webhook` (mude com `LIVEKIT_WEBHOOK_URL`).
+- **Limite:** como o hub do chat, o mapa só funciona com uma instância do servidor. Se o servidor
+  ficar fora do ar enquanto alguém sai de uma chamada, essa saída se perde; quem continua na
+  chamada reaparece quando o client reconecta.
+
+## Falta para a Fase 2
+
+- Teste em redes diferentes (4G e Wi-Fi de outra casa). Precisa do LiveKit acessível de fora
+  (LiveKit Cloud ou a VM da Fase 3); em desenvolvimento, o LiveKit só é alcançado na rede local.

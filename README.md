@@ -112,7 +112,14 @@ microfone, e sem fone o som de uma volta pela outra.
 6. No ⚙ ao lado do seu nome, troque o microfone ou a saída de áudio (por exemplo, para um fone
    USB ou Bluetooth) com a chamada aberta: a troca vale na hora e continua escolhida depois de
    recarregar a página.
-7. Clique em **Sair** numa delas, ou feche a aba: o nome some da outra na hora.
+7. Saia da chamada numa das janelas e continue olhando a barra lateral dela: a outra pessoa
+   continua aparecendo embaixo de **Geral**, com o 🔇 ou o 🎧✕ quando ela muta ou liga o deaf.
+   Quem está fora da chamada vê quem está dentro.
+8. Clique em **Sair** na janela que ficou na chamada, ou feche a aba: o nome some da outra na
+   hora.
+
+Antes desse teste, reinicie o `cargo run -p call-server` e rode `docker compose up -d`: o
+LiveKit avisa o servidor de quem entra e sai pelo webhook `POST /livekit/webhook`.
 
 ## API
 
@@ -131,8 +138,9 @@ microfone, e sem fone o som de uma volta pela outra.
 | `GET/POST /guilds/{id}/channels`, `PATCH/DELETE /channels/{id}` | Bearer | Canais de texto e voz (mudanças só para o dono) |
 | `GET/POST /channels/{id}/messages` | Bearer | Histórico paginado (`before`, `after`, `limit`) e envio de mensagem |
 | `POST /ws/ticket` | Bearer | Ticket de uso único (30 s) para abrir o WebSocket |
-| `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat |
+| `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE`, `VOICE_STATE_UPDATE` e heartbeat |
 | `POST /channels/{id}/voice/token` | Bearer | Token do LiveKit para entrar no canal de voz (membros, 5 min) |
+| `POST /livekit/webhook` | assinatura do LiveKit | Entrou e saiu das salas de voz; vira `VOICE_STATE_UPDATE` no WebSocket |
 
 O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
 `Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.

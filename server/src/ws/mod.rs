@@ -20,6 +20,7 @@ use axum::{
 use proto::{ClientEvent, ErrorCode, ServerEvent, UserId, WsQuery, WsTicketResponse};
 use tokio::time::Instant;
 
+use crate::voice_state::VoiceFlags;
 use crate::{
     access::{channel_member, guild_member},
     auth::AuthUser,
@@ -127,7 +128,8 @@ async fn handle(state: &AppState, conn: ConnId, user: UserId, text: &str) -> Opt
             ClientEvent::Subscribe { guild_id } => {
                 guild_member(&state.db, guild_id, user).await?;
                 let online = state.hub.subscribe(conn, guild_id);
-                Ok(Some(ServerEvent::Subscribed { guild_id, online }))
+                let voice = state.voice_states.guild(guild_id);
+                Ok(Some(ServerEvent::Subscribed { guild_id, online, voice }))
             }
             ClientEvent::TypingStart { channel_id } => {
                 let access = channel_member(&state.db, channel_id, user).await?;
@@ -137,6 +139,23 @@ async fn handle(state: &AppState, conn: ConnId, user: UserId, text: &str) -> Opt
                 let guild_id = access.guild.guild_id;
                 let typing = ServerEvent::TypingStart { guild_id, channel_id, user_id: user };
                 state.hub.publish(guild_id, &typing, Some(conn));
+                Ok(None)
+            }
+            ClientEvent::VoiceStateUpdate { channel_id, muted, deafened } => {
+                let voice = &state.voice_states;
+                let mut events: Vec<_> =
+                    voice.set_flags(user, VoiceFlags { muted, deafened }).into_iter().collect();
+                match channel_id {
+                    Some(channel_id) => {
+                        let access = channel_member(&state.db, channel_id, user).await?;
+                        if access.channel.kind != proto::ChannelKind::Voice {
+                            return Err(AppError::Validation("só canais de voz têm chamada"));
+                        }
+                        events.extend(voice.join(access.guild.guild_id, channel_id, user, None));
+                    }
+                    None => events.extend(voice.leave_declared(user)),
+                }
+                crate::routes::voice::publish_voice(state, events);
                 Ok(None)
             }
         }
