@@ -55,6 +55,8 @@ pub struct Store {
     pub voice_session: StoredValue<u64>,
     /// Mute e deaf. Valem entre chamadas e ficam guardados no navegador.
     pub voice_controls: RwSignal<VoiceControls>,
+    /// Microfone e saída de áudio escolhidos, guardados no navegador.
+    pub audio_prefs: RwSignal<crate::voice::AudioPrefs>,
 }
 
 impl Store {
@@ -81,6 +83,7 @@ impl Store {
             voice_room: StoredValue::new_local(None),
             voice_session: StoredValue::new(0),
             voice_controls: RwSignal::new(crate::voice::load_controls()),
+            audio_prefs: RwSignal::new(crate::voice::load_prefs()),
         }
     }
 

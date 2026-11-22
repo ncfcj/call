@@ -45,15 +45,59 @@ class VoiceSession {
     this.emit("PARTICIPANTS", this.participants());
   }
 
+  // O id, se o dispositivo ainda existir; senão "" (padrão do sistema).
+  static async present(kind, id) {
+    if (!id) return "";
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      return devices.some((d) => d.kind === kind && d.deviceId === id) ? id : "";
+    } catch (_) {
+      return "";
+    }
+  }
+
+  // Microfones e saídas de áudio, em JSON. Pede a permissão do microfone se ainda não houver,
+  // porque sem ela o navegador esconde os nomes dos dispositivos.
+  static async listDevices() {
+    const LK = globalThis.LivekitClient;
+    const describe = (d) => ({ id: d.deviceId, label: d.label || "" });
+    let inputs = [];
+    let outputs = [];
+    try {
+      inputs = (await LK.Room.getLocalDevices("audioinput", true)).map(describe);
+    } catch (_) {
+      // Sem permissão: a lista fica vazia e a UI explica.
+    }
+    try {
+      outputs = (await LK.Room.getLocalDevices("audiooutput", false)).map(describe);
+    } catch (_) {}
+    return JSON.stringify({
+      inputs,
+      outputs,
+      can_choose_output: LK.supportsAudioOutputSelection(),
+    });
+  }
+
   // `micEnabled` e `deafened` são o estado com que a pessoa entra (ela pode entrar mutada).
-  async connect(url, token, micEnabled, deafened) {
+  // `inputId` e `outputId` são os dispositivos escolhidos ("" = padrão do sistema).
+  async connect(url, token, micEnabled, deafened, inputId, outputId) {
     this.deafened = deafened;
+    // O LiveKit pede o dispositivo como `exact`: um headset salvo e depois desconectado faria o
+    // microfone falhar. Dispositivo que sumiu volta ao padrão do sistema.
+    inputId = await VoiceSession.present("audioinput", inputId);
+    outputId = await VoiceSession.present("audiooutput", outputId);
     const LK = globalThis.LivekitClient;
     if (!LK) throw new Error("o livekit-client não carregou");
 
     const room = new LK.Room({
       // O processamento do navegador evita eco e microfonia. Não desligue.
-      audioCaptureDefaults: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      audioCaptureDefaults: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        deviceId: inputId || undefined,
+      },
+      audioOutput: outputId ? { deviceId: outputId } : undefined,
       adaptiveStream: false,
       dynacast: false,
     });
@@ -121,6 +165,13 @@ class VoiceSession {
     if (!this.room) return;
     await this.room.localParticipant.setMicrophoneEnabled(enabled);
     this.emitParticipants();
+  }
+
+  // Troca o microfone ("audioinput") ou a saída ("audiooutput") durante a chamada.
+  async switchDevice(kind, deviceId) {
+    if (!this.room) return;
+    const id = await VoiceSession.present(kind, deviceId);
+    await this.room.switchActiveDevice(kind, id || "default");
   }
 
   // Deaf: silencia (ou volta) o áudio de todos os outros, sem sair da sala.

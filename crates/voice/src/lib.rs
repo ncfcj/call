@@ -12,7 +12,25 @@ use serde::Deserialize;
 #[cfg(target_arch = "wasm32")]
 mod room;
 #[cfg(target_arch = "wasm32")]
-pub use room::{VoiceError, VoiceRoom};
+pub use room::{ConnectOptions, VoiceError, VoiceRoom, list_devices};
+
+/// Um microfone ou uma saída de áudio.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct AudioDevice {
+    /// `deviceId` do navegador.
+    pub id: String,
+    /// Nome do dispositivo; vazio quando o navegador ainda não deu permissão.
+    pub label: String,
+}
+
+/// Dispositivos de áudio disponíveis.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct AudioDevices {
+    pub inputs: Vec<AudioDevice>,
+    pub outputs: Vec<AudioDevice>,
+    /// O navegador deixa escolher a saída (`setSinkId`). O Safari, por exemplo, não deixa.
+    pub can_choose_output: bool,
+}
 
 /// Alguém na sala de voz.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -88,5 +106,13 @@ mod tests {
             Some(VoiceEvent::AudioBlocked(true))
         );
         assert_eq!(VoiceEvent::parse(r#"{"t":"NOVO_EVENTO"}"#), None);
+    }
+
+    #[test]
+    fn parses_the_device_list() {
+        let json = r#"{"inputs":[{"id":"default","label":"Padrão"}],"outputs":[],"can_choose_output":true}"#;
+        let devices: AudioDevices = serde_json::from_str(json).unwrap();
+        assert_eq!(devices.inputs[0].label, "Padrão");
+        assert!(devices.outputs.is_empty() && devices.can_choose_output);
     }
 }

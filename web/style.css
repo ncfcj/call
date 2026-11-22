@@ -219,6 +219,18 @@ code { font-family: ui-monospace, Consolas, monospace; }
 .dialog { background: var(--bg-2); padding: 1.5rem; border-radius: 10px; width: min(100%, 420px); display: flex; flex-direction: column; gap: 0.8rem; }
 .dialog form { display: flex; flex-direction: column; gap: 0.6rem; }
 .dialog h2 { font-size: 1.05rem; }
+.dialog .field { display: flex; flex-direction: column; gap: 0.35rem; color: var(--muted); font-size: 0.85rem; }
+.dialog select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-0);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+}
+.dialog select:focus { border-color: var(--accent); outline: none; }
+.dialog .hint { margin: 0; color: var(--muted); font-size: 0.85rem; }
+.dialog-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 0.4rem; }
 .dialog hr { width: 100%; border: 0; border-top: 1px solid var(--bg-3); }
 
 /* Telas estreitas: some a lista de membros e encolhe os canais. */

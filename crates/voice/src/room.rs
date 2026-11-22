@@ -1,6 +1,6 @@
 use wasm_bindgen::{JsCast, JsValue, prelude::*};
 
-use crate::VoiceEvent;
+use crate::{AudioDevices, VoiceEvent};
 
 // `VoiceSession` vem de `js/voice.js`, carregado pelo web/index.html no global `CallVoice`.
 #[wasm_bindgen(js_namespace = CallVoice)]
@@ -11,12 +11,25 @@ extern "C" {
     fn new(on_event: &js_sys::Function) -> VoiceSession;
 
     #[wasm_bindgen(method, catch)]
+    #[allow(clippy::too_many_arguments)]
     async fn connect(
         this: &VoiceSession,
         url: &str,
         token: &str,
         mic_enabled: bool,
         deafened: bool,
+        input_id: &str,
+        output_id: &str,
+    ) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(static_method_of = VoiceSession, js_name = listDevices)]
+    async fn list_devices_json() -> JsValue;
+
+    #[wasm_bindgen(method, catch, js_name = switchDevice)]
+    async fn switch_device(
+        this: &VoiceSession,
+        kind: &str,
+        device_id: &str,
     ) -> Result<JsValue, JsValue>;
 
     #[wasm_bindgen(method, js_name = setDeafened)]
@@ -72,10 +85,30 @@ impl VoiceRoom {
         &self,
         url: &str,
         token: &str,
-        mic_enabled: bool,
-        deafened: bool,
+        opts: &ConnectOptions,
     ) -> Result<(), VoiceError> {
-        self.session.connect(url, token, mic_enabled, deafened).await?;
+        self.session
+            .connect(
+                url,
+                token,
+                opts.mic_enabled,
+                opts.deafened,
+                opts.input.as_deref().unwrap_or(""),
+                opts.output.as_deref().unwrap_or(""),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// Troca o microfone durante a chamada. `None` volta ao padrão do sistema.
+    pub async fn switch_input(&self, device: Option<&str>) -> Result<(), VoiceError> {
+        self.session.switch_device("audioinput", device.unwrap_or("")).await?;
+        Ok(())
+    }
+
+    /// Troca a saída de áudio durante a chamada. `None` volta ao padrão do sistema.
+    pub async fn switch_output(&self, device: Option<&str>) -> Result<(), VoiceError> {
+        self.session.switch_device("audiooutput", device.unwrap_or("")).await?;
         Ok(())
     }
 
@@ -97,4 +130,24 @@ impl VoiceRoom {
     pub async fn disconnect(&self) {
         self.session.disconnect().await;
     }
+}
+
+/// Como entrar na sala: estado do microfone e do som, e os dispositivos escolhidos.
+#[derive(Debug, Clone, Default)]
+pub struct ConnectOptions {
+    pub mic_enabled: bool,
+    pub deafened: bool,
+    /// Microfone (`deviceId`); `None` é o padrão do sistema.
+    pub input: Option<String>,
+    /// Saída de áudio (`deviceId`); `None` é o padrão do sistema.
+    pub output: Option<String>,
+}
+
+/// Lista microfones e saídas de áudio. Pede a permissão do microfone se ainda não houver.
+pub async fn list_devices() -> AudioDevices {
+    VoiceSession::list_devices_json()
+        .await
+        .as_string()
+        .and_then(|json| serde_json::from_str(&json).ok())
+        .unwrap_or_default()
 }

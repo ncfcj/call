@@ -109,7 +109,10 @@ microfone, e sem fone o som de uma volta pela outra.
 5. Teste o mute e o deaf pelos botões 🎤 e 🎧 ao lado do seu nome (ou Ctrl+Shift+M e
    Ctrl+Shift+D). Com o mute, a outra janela mostra 🔇 no seu nome e para de ouvir você. Com o
    deaf, você para de ouvir a outra janela e o seu microfone fecha. Desmutar em deaf volta tudo.
-6. Clique em **Sair** numa delas, ou feche a aba: o nome some da outra na hora.
+6. No ⚙ ao lado do seu nome, troque o microfone ou a saída de áudio (por exemplo, para um fone
+   USB ou Bluetooth) com a chamada aberta: a troca vale na hora e continua escolhida depois de
+   recarregar a página.
+7. Clique em **Sair** numa delas, ou feche a aba: o nome some da outra na hora.
 
 ## API
 

@@ -51,7 +51,7 @@ do navegador (ou do WebView2 no Tauri) pelo SDK JavaScript, numa ponte em três 
 | --- | --- | --- |
 | SDK | `web/vendor/livekit-client-2.25.0.umd.js` | O `livekit-client` oficial (global `LivekitClient`), guardado no repositório e conferido pelo hash do npm (`web/vendor/README.md`) |
 | Ponte JS | `crates/voice/js/voice.js` | Classe `VoiceSession` (global `CallVoice`): o único código que conhece a API do LiveKit. Emite eventos em JSON `{"t", "d"}` |
-| Ponte Rust | `crates/voice/src` | `VoiceRoom` (`connect`, `disconnect`, `set_microphone_enabled`, `set_deafened`, `start_audio`) e `VoiceEvent`, tipados |
+| Ponte Rust | `crates/voice/src` | `VoiceRoom` (`connect`, `disconnect`, `set_microphone_enabled`, `set_deafened`, `switch_input`, `switch_output`, `start_audio`), `list_devices` e `VoiceEvent`, tipados |
 
 Os dois arquivos JS entram pelo `web/index.html` como `<script data-trunk>`, e o Trunk põe o hash
 do conteúdo no nome de cada um. A ponte não é um "snippet" do wasm-bindgen
@@ -119,6 +119,13 @@ classDiagram
   já estava mutado; desmutar em deaf sai do deaf. Os botões ficam no painel do usuário e valem
   dentro e fora de uma chamada (dá para entrar já mutado, sem nem abrir o microfone). Atalhos:
   Ctrl+Shift+M e Ctrl+Shift+D. O estado fica no `localStorage` do navegador.
+- **Dispositivos:** o botão ⚙ do painel do usuário abre a escolha do microfone e da saída de
+  áudio, que valem na hora, inclusive no meio da chamada (`room.switchActiveDevice`), e ficam
+  guardadas no navegador. "Padrão do sistema" é a primeira opção. Um dispositivo salvo que sumiu
+  (headset desconectado) cai no padrão sem erro, e volta a valer quando reaparece: o LiveKit pede
+  o dispositivo como `exact`, então a ponte confere a lista antes. Sem a permissão do microfone,
+  o navegador esconde os nomes, e a janela pede a permissão. A saída só aparece onde o navegador
+  deixa escolher (`setSinkId`); no Safari, por exemplo, o som sai pelo padrão do sistema.
 - **Quem vê o quê:** o mute aparece para os outros na hora, pelo próprio LiveKit (a faixa do
   microfone fica mutada). O deaf, por enquanto, só aparece para você: o estado de voz para os
   outros chega pelo WebSocket na etapa do webhook.
@@ -132,6 +139,5 @@ todos os membros chega com o webhook do LiveKit.
 
 ## Próximas etapas
 
-- Seletor de microfone e de saída de áudio.
 - Teste em redes diferentes (4G e Wi-Fi de outra casa).
 - Webhook do LiveKit e o estado de voz difundido pelo WebSocket do chat.

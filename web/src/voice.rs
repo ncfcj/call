@@ -8,7 +8,7 @@ use std::{collections::HashSet, rc::Rc};
 use call_core::VoiceControls;
 use leptos::{prelude::*, task::spawn_local};
 use proto::{ChannelId, GuildId};
-use voice::{VoiceEvent, VoiceParticipant, VoiceRoom};
+use voice::{ConnectOptions, VoiceEvent, VoiceParticipant, VoiceRoom};
 
 use crate::store::Store;
 
@@ -72,9 +72,14 @@ impl Store {
                 return;
             }
             let controls = self.voice_controls.get_untracked();
-            let connected = room
-                .connect(&token.url, &token.token, controls.mic_open(), controls.deafened)
-                .await;
+            let prefs = self.audio_prefs.get_untracked();
+            let opts = ConnectOptions {
+                mic_enabled: controls.mic_open(),
+                deafened: controls.deafened,
+                input: prefs.input,
+                output: prefs.output,
+            };
+            let connected = room.connect(&token.url, &token.token, &opts).await;
             if let Err(err) = connected {
                 room.disconnect().await;
                 if self.is_voice_current(session) {
@@ -127,6 +132,32 @@ impl Store {
                 self.notify(format!("O microfone não abriu ({err})."));
             }
         });
+    }
+
+    /// Escolhe o microfone (`None` = padrão do sistema). Vale já na chamada aberta, se houver.
+    pub fn set_input(self, device: Option<String>) {
+        self.audio_prefs.update(|p| p.input = device.clone());
+        save_prefs(&self.audio_prefs.get_untracked());
+        if let Some(room) = self.voice_room.get_value() {
+            spawn_local(async move {
+                if let Err(err) = room.switch_input(device.as_deref()).await {
+                    self.notify(format!("Não consegui trocar o microfone ({err})."));
+                }
+            });
+        }
+    }
+
+    /// Escolhe a saída de áudio (`None` = padrão do sistema).
+    pub fn set_output(self, device: Option<String>) {
+        self.audio_prefs.update(|p| p.output = device.clone());
+        save_prefs(&self.audio_prefs.get_untracked());
+        if let Some(room) = self.voice_room.get_value() {
+            spawn_local(async move {
+                if let Err(err) = room.switch_output(device.as_deref()).await {
+                    self.notify(format!("Não consegui trocar a saída de áudio ({err})."));
+                }
+            });
+        }
     }
 
     /// Destrava o áudio bloqueado pelo navegador. Chamado por um clique.
@@ -208,5 +239,29 @@ fn save_controls(c: VoiceControls) {
     if let Some(s) = storage() {
         let _ =
             s.set_item(CONTROLS_KEY, &format!("{},{}", u8::from(c.muted), u8::from(c.deafened)));
+    }
+}
+
+/// Dispositivos escolhidos. `None` é o padrão do sistema; um dispositivo que sumiu (fone
+/// desconectado) também cai no padrão (a ponte confere antes de usar).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AudioPrefs {
+    pub input: Option<String>,
+    pub output: Option<String>,
+}
+
+const INPUT_KEY: &str = "call.voice.input";
+const OUTPUT_KEY: &str = "call.voice.output";
+
+pub fn load_prefs() -> AudioPrefs {
+    let get =
+        |key| storage().and_then(|s| s.get_item(key).ok().flatten()).filter(|v| !v.is_empty());
+    AudioPrefs { input: get(INPUT_KEY), output: get(OUTPUT_KEY) }
+}
+
+fn save_prefs(p: &AudioPrefs) {
+    if let Some(s) = storage() {
+        let _ = s.set_item(INPUT_KEY, p.input.as_deref().unwrap_or(""));
+        let _ = s.set_item(OUTPUT_KEY, p.output.as_deref().unwrap_or(""));
     }
 }

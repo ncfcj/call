@@ -154,7 +154,7 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 - [x] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz. O `livekit-client` 2.25.0 fica em `web/vendor/`, sem npm
 - [x] 2b. Grupo de até 6 pessoas, com indicador de quem está falando. Testado com 6 participantes; o anel acompanha quem fala em menos de 1 s
 - [x] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído). Regras do Discord, atalhos Ctrl+Shift+M e Ctrl+Shift+D; o deaf só aparece para os outros com o webhook
-- [ ] Seletor de microfone e fone de saída
+- [x] Seletor de microfone e fone de saída. Vale no meio da chamada e fica guardado; dispositivo desconectado cai no padrão
 - [ ] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat
 
 Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conversam sem eco perceptível. Mute e deaf aparecem na barra lateral dos outros em menos de 1 s. Fechar a aba remove o usuário do canal.
@@ -167,7 +167,7 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 | Ponte `voice` e chamada 1:1 | Pronta | Manual, duas janelas (README) |
 | Grupo e indicador de quem fala | Pronta | Robôs no navegador (6 participantes) |
 | Mute, deaf e detecção de voz | Pronta | Manual, duas janelas (README) |
-| Seletor de dispositivos | A fazer | |
+| Seletor de dispositivos | Pronta | Manual (README) |
 | Webhook e estado de voz no WebSocket | A fazer | |
 
 ### Fase 3: polimento e deploy (cerca de 1 semana)
