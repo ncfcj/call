@@ -272,6 +272,7 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
+- **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
 - **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
 
