@@ -3,7 +3,10 @@
 //! Os componentes leem os sinais e chamam as ações. Os eventos do WebSocket entram por
 //! [`Store::apply`]. A lógica testável (histórico, digitação, backoff) fica no `call-core`.
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use api_client::{ApiClient, ApiError};
 use call_core::{ConnState, MessageLog, Typing};
@@ -15,7 +18,7 @@ use proto::{
     message::{MESSAGES_PAGE_DEFAULT, MESSAGES_PAGE_MAX},
 };
 
-use crate::gateway;
+use crate::{gateway, voice::VoiceState};
 
 pub fn now_ms() -> f64 {
     js_sys::Date::now()
@@ -45,6 +48,11 @@ pub struct Store {
     pub ws_tx: StoredValue<Option<UnboundedSender<ClientEvent>>>,
     /// Muda a cada login e logout. Tarefas de uma sessão antiga param quando o veem mudar.
     pub epoch: StoredValue<u64>,
+    /// Chamada de voz atual, se houver (ver `voice.rs`).
+    pub voice: RwSignal<Option<VoiceState>>,
+    pub voice_room: StoredValue<Option<Rc<::voice::VoiceRoom>>, LocalStorage>,
+    /// Muda a cada entrada e saída da voz; eventos de uma sala antiga são ignorados.
+    pub voice_session: StoredValue<u64>,
 }
 
 impl Store {
@@ -67,6 +75,9 @@ impl Store {
             notice: RwSignal::new(None),
             ws_tx: StoredValue::new(None),
             epoch: StoredValue::new(0),
+            voice: RwSignal::new(None),
+            voice_room: StoredValue::new_local(None),
+            voice_session: StoredValue::new(0),
         }
     }
 
@@ -127,6 +138,7 @@ impl Store {
     /// Zera o estado e encerra as tarefas da sessão anterior (o WebSocket fecha).
     fn reset(self) {
         self.epoch.update_value(|e| *e += 1);
+        self.leave_voice();
         self.close_ws();
         self.me.set(None);
         self.guilds.set(Vec::new());
@@ -403,6 +415,9 @@ impl Store {
     pub async fn leave_guild(self, guild: GuildId) {
         match self.api().leave_guild(guild).await {
             Ok(()) => {
+                if self.voice.with_untracked(|v| v.as_ref().is_some_and(|v| v.guild == guild)) {
+                    self.leave_voice();
+                }
                 self.guilds.update(|g| g.retain(|x| x.id != guild));
                 self.online.update(|o| {
                     o.remove(&guild);

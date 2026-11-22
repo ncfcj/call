@@ -4,3 +4,8 @@ dist = "dist"
 
 [serve]
 port = 8080
+
+# Recompila também quando mudam os crates do workspace (api-client, core, proto, voice),
+# e não só a pasta web/.
+[watch]
+watch = ["src", "index.html", "style.css", "vendor", "../crates"]

@@ -186,11 +186,7 @@ fn ChannelSidebar() -> impl IntoView {
                     each=move || channels(ChannelKind::Voice)
                     key=|c: &Channel| (c.id, c.name.clone())
                     children=move |channel: Channel| {
-                        view! {
-                            <div class="channel voice" title="A voz chega na Fase 2">
-                                "🔊 " {channel.name}
-                            </div>
-                        }
+                        view! { <super::voice::VoiceChannel channel /> }
                     }
                 />
                 <Show when=is_owner>
@@ -209,6 +205,7 @@ fn ChannelSidebar() -> impl IntoView {
                     </button>
                 </Show>
             </Show>
+            <super::voice::VoicePanel />
             <UserPanel />
         </aside>
     }

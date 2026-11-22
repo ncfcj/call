@@ -39,7 +39,7 @@ jobs:
       - run: cargo fmt --all --check
       # Servidor e crates compartilhados, no alvo nativo
       - run: cargo clippy -p proto -p call-server --all-targets -- -D warnings
-      - run: cargo test -p proto -p call-server -p call-core -p api-client
+      - run: cargo test -p proto -p call-server -p call-core -p api-client -p voice
       # Client, no alvo do navegador
       - run: cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
       - working-directory: web

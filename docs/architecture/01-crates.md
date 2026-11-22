@@ -47,5 +47,5 @@ execução e as tracejadas ainda não existem.
 | `call-server` | `proto`, `axum`, `sqlx`, `tokio`, `argon2`, `jsonwebtoken` | `/health`, `/auth/*`, `/users/@me`, servidores, canais, convites e mensagens, WebSocket (`/ws`), CORS e migrations |
 | `api-client` | `proto`, `reqwest`, `gloo-net` | Todas as rotas REST, refresh automático e o WebSocket |
 | `call-core` | `proto` | `MessageLog`, `Typing`, `Backoff` e `ConnState` |
-| `voice` | `wasm-bindgen` | Vazio (Fase 2) |
+| `voice` | `wasm-bindgen`, `serde` | Ponte com o `livekit-client` JS: `VoiceRoom` e `VoiceEvent` ([09-voz.md](09-voz.md)) |
 | `web` | `api-client`, `call-core`, `leptos` | Login, servidores, canais, chat em tempo real e reconexão ([08-client.md](08-client.md)) |

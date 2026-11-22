@@ -135,16 +135,35 @@ code { font-family: ui-monospace, Consolas, monospace; }
 .channel:hover { background: var(--bg-3); color: var(--text); }
 .channel.active { background: var(--bg-3); color: #fff; }
 .channel.unread { color: #fff; font-weight: 600; }
-.channel.voice { cursor: not-allowed; opacity: 0.7; }
-.channel.voice:hover { background: none; color: var(--muted); }
+.voice-members { list-style: none; margin: 0 0 0.2rem; padding: 0 8px 0 2rem; }
+.voice-members li { display: flex; align-items: center; gap: 0.45rem; padding: 0.15rem 0; font-size: 0.85rem; color: var(--text); }
+.voice-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--bg-3); flex: none; box-shadow: 0 0 0 2px transparent; transition: box-shadow 0.1s; }
+.voice-members li.speaking .voice-dot { box-shadow: 0 0 0 2px var(--online); }
+.voice-members li.muted { color: var(--muted); }
+.mic-off { font-size: 0.75rem; }
+.voice-panel {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border-top: 1px solid var(--bg-0);
+  background: #232428;
+}
+.voice-panel div { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.voice-panel small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.primary.small { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+.hangup { border: 0; border-radius: 6px; background: var(--danger); color: #fff; padding: 0.35rem 0.7rem; font-weight: 600; }
 .new-channel { display: flex; gap: 6px; align-items: center; margin: 0.6rem 8px; }
 .new-channel input[type="text"], .new-channel > input { flex: 1; min-width: 0; padding: 0.35rem 0.5rem; }
 .new-channel label { color: var(--muted); font-size: 0.8rem; display: flex; gap: 3px; align-items: center; }
 .new-channel button { border: 0; border-radius: 4px; background: var(--bg-3); padding: 0.3rem 0.6rem; }
 .channels > .link { margin: 0.4rem 1rem; }
+/* Empurra o painel do usuário (e o de voz, quando houver) para o fim da barra. */
+.channels > .user-panel:first-of-type, .channels > .voice-panel { margin-top: auto; }
+.channels > .voice-panel + .user-panel { margin-top: 0; }
 
 .user-panel {
-  margin-top: auto;
   background: #232428;
   padding: 0.6rem 0.8rem;
   display: flex;

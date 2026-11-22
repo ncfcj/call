@@ -151,7 +151,7 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 ### Fase 2: voz com WebRTC (1 a 2 semanas)
 
 - [x] `POST /channels/:id/voice/token`: confere a participação no servidor e emite um token LiveKit (sala = id do canal, TTL curto). Validade de 5 min, só microfone, até 10 pessoas por sala
-- [ ] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz
+- [x] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz. O `livekit-client` 2.25.0 fica em `web/vendor/`, sem npm
 - [ ] 2b. Grupo de até 6 pessoas, com indicador de quem está falando
 - [ ] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído)
 - [ ] Seletor de microfone e fone de saída
@@ -164,7 +164,7 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 | Etapa | Situação | Teste funcional |
 | --- | --- | --- |
 | Token de voz | Pronta | `scripts/teste-voz-token.ps1` |
-| Ponte `voice` e chamada 1:1 | A fazer | |
+| Ponte `voice` e chamada 1:1 | Pronta | Manual, duas janelas (README) |
 | Grupo e indicador de quem fala | A fazer | |
 | Mute, deaf e detecção de voz | A fazer | |
 | Seletor de dispositivos | A fazer | |

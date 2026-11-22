@@ -78,6 +78,7 @@ powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
 | `teste-websocket.ps1` | Ticket, heartbeat, inscrição, presença, digitação e mensagem em tempo real com três conexões |
 | `teste-client.ps1 -Convite <código>` | Um robô entra no seu servidor e conversa com você no navegador (veja abaixo) |
 | `teste-voz-token.ps1` | Token de voz: emissão, validação no próprio LiveKit e recusas |
+| (manual) | Chamada de voz entre duas janelas (veja abaixo) |
 
 Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
 
@@ -92,6 +93,17 @@ Os dados criados ficam no banco local, e o script mostra no fim o login de um us
 
 Para conversar entre duas pessoas de verdade, use dois navegadores (ou uma janela anônima),
 porque a sessão fica num cookie por navegador.
+
+**Chamada de voz entre duas janelas.** Use fones de ouvido: as duas janelas usam o mesmo
+microfone, e sem fone o som de uma volta pela outra.
+
+1. Abra `http://localhost:8080` e `http://127.0.0.1:8080`. O navegador trata os dois como sites
+   diferentes, então cada um tem a própria sessão: entre com uma conta em cada.
+2. Na primeira, crie um servidor; na segunda, entre pelo código de convite.
+3. Nas duas, clique no canal de voz **Geral** e permita o microfone. O painel "Voz conectada"
+   aparece em cima do seu nome, e os dois nomes aparecem abaixo do canal.
+4. Fale: você se ouve na outra janela com um pequeno atraso, e o seu nome ganha um anel verde.
+5. Clique em **Sair** numa delas, ou feche a aba: o nome some da outra na hora.
 
 ## API
 

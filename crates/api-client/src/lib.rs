@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use proto::{
     AuthResponse, Channel, ChannelId, CreateChannelRequest, CreateGuildRequest,
     CreateMessageRequest, ErrorResponse, Guild, GuildId, HealthResponse, LoginRequest, Member,
-    Message, MessagesQuery, RegisterRequest, User, WsTicketResponse,
+    Message, MessagesQuery, RegisterRequest, User, VoiceTokenResponse, WsTicketResponse,
 };
 use reqwest::{Method, StatusCode};
 use serde::{Serialize, de::DeserializeOwned};
@@ -228,6 +228,13 @@ impl ApiClient {
     }
 
     // --- WebSocket --------------------------------------------------------------------------
+
+    // --- Voz ---------------------------------------------------------------------------------
+
+    /// `POST /channels/{id}/voice/token`
+    pub async fn voice_token(&self, channel: ChannelId) -> ApiResult<VoiceTokenResponse> {
+        self.json(Method::POST, &format!("/channels/{channel}/voice/token"), None::<&()>).await
+    }
 
     /// `POST /ws/ticket`
     pub async fn ws_ticket(&self) -> ApiResult<WsTicketResponse> {
