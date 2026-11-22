@@ -235,6 +235,7 @@ se todos passarem.
 - [x] Testes de mutação (`cargo-mutants`): nas linhas alteradas de cada PR e no workspace inteiro toda semana
 - [x] Dependências: vulnerabilidades (RustSec), licenças, crates banidos e origens (`cargo-deny`)
 - [x] Atualizações automáticas de dependências e Actions (Dependabot)
+- [x] Análise semântica de segurança com CodeQL (Rust, JavaScript da ponte de voz e workflows)
 - [x] Bloquear o merge sem o `ci-ok` verde: repositório público e proteção da `main` (check `ci-ok`, PR obrigatório, vale para administradores)
 
 Próximas etapas sugeridas, em ordem de custo-benefício:
@@ -250,7 +251,6 @@ Próximas etapas sugeridas, em ordem de custo-benefício:
 | Imagens e VM | Vulnerabilidades no sistema e nas imagens Docker do deploy | Trivy |
 | SBOM | Inventário das dependências de cada versão publicada | cargo-cyclonedx |
 | Ganchos locais | Rodar `fmt` e `clippy` antes de cada commit | git hooks (pre-commit) |
-| Análise semântica | CodeQL ou SonarQube Cloud, gratuitos só para repositório público | CodeQL, SonarQube Cloud |
 | Trocar o `chrono` | Sair do crate sem manutenção quando o `sqlx` e a `livekit-api` permitirem | `time` ou `jiff` |
 
 ## Ideias para o futuro (opcionais, sem data)

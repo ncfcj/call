@@ -14,6 +14,12 @@ cada push na `main`; o check **`ci-ok`** só fica verde se todos os portões pas
 | `mutation` | Os testes pegam mudanças no código: nenhuma mutação sobrevive | `cargo-mutants` (`.cargo/mutants.toml`) | Alguma mutação não for pega por nenhum teste |
 | `ci-ok` | Resumo para a proteção de branch | Actions | Qualquer job acima não passar |
 
+Fora do `ci-ok`, o workflow **CodeQL** (`.github/workflows/codeql.yml`) faz análise semântica de
+segurança em Rust, no JavaScript da ponte de voz e nos próprios workflows, a cada PR, push na
+`main` e toda quarta. Usa a suíte `security-and-quality` e ignora `web/vendor` (SDK do LiveKit).
+Os alertas aparecem em **Security > Code scanning** e como comentários no PR. O SonarQube Cloud
+não foi usado porque não analisa Rust.
+
 Na aba **Summary** de cada execução aparecem a cobertura por arquivo e, se houver, as mutações
 que sobreviveram.
 
