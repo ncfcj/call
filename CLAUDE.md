@@ -29,4 +29,8 @@ quem chama o quê, impacto de uma mudança, estrutura de pastas). Prefira-o ao G
 - O índice fica em `.codegraph/` (fora do git). O servidor MCP sincroniza sozinho; pela CLI, rode
   `codegraph sync` depois de mudanças grandes.
 - Grep só para texto que o índice não cobre: Markdown, `.env`, logs, CSS e mensagens de erro.
+- **Obrigatório:** o hook `.claude/hooks/enforce-codegraph.mjs` (registrado em `.claude/settings.json`)
+  barra Grep, Glob e `grep`/`rg`/`find`/`Select-String`/`git grep` em código do repositório.
+  Passam: arquivos fora do índice, buscas fora do repositório (ex.: `~/.cargo`) e `grep` que só
+  filtra a saída de outro comando (`cargo test | grep ...`).
 
