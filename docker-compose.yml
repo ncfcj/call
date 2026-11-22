@@ -19,8 +19,10 @@ services:
 
   livekit:
     image: livekit/livekit-server:latest
-    # --dev usa as chaves devkey/secret. --node-ip para o Docker Desktop no Windows.
-    command: --dev --bind 0.0.0.0 --node-ip 127.0.0.1
+    # --dev usa as chaves devkey/secret. --node-ip é o endereço que o LiveKit anuncia para a
+    # mídia (WebRTC). Use o IP da máquina na rede local (LIVEKIT_NODE_IP no .env): o Firefox não
+    # aceita 127.0.0.1 como candidato ICE, e a chamada fica em "Conectando à voz..." para sempre.
+    command: --dev --bind 0.0.0.0 --node-ip ${LIVEKIT_NODE_IP:-127.0.0.1}
     ports:
       - "7880:7880"
       - "7881:7881"

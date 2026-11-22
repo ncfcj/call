@@ -37,6 +37,11 @@ sem o cliente HTTP dela). Configuração: `LIVEKIT_URL` (a URL que os clients us
 `LIVEKIT_API_KEY` e `LIVEKIT_API_SECRET`. Em desenvolvimento, o `livekit-server --dev` do
 `docker compose` usa `devkey` e `secret`.
 
+**Endereço da mídia:** o LiveKit anuncia para o WebRTC o IP de `--node-ip`, lido de
+`LIVEKIT_NODE_IP` no `.env`. Em desenvolvimento, use o IP da máquina na rede local. O Firefox
+não aceita candidatos ICE de loopback: com `127.0.0.1`, a sinalização conecta, mas a mídia fica
+em `checking` até falhar. Em produção (Fase 3), é o IP público da VM ou o LiveKit Cloud.
+
 ## Ponte com o `livekit-client`
 
 O SDK Rust do LiveKit depende do libwebrtc nativo e não compila para WASM. A voz usa o WebRTC

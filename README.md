@@ -94,7 +94,10 @@ Os dados criados ficam no banco local, e o script mostra no fim o login de um us
 Para conversar entre duas pessoas de verdade, use dois navegadores (ou uma janela anônima),
 porque a sessão fica num cookie por navegador.
 
-**Chamada de voz entre duas janelas.** Use fones de ouvido: as duas janelas usam o mesmo
+**Chamada de voz entre duas janelas.** Antes, ponha em `LIVEKIT_NODE_IP` (no `.env`) o IP desta
+máquina na rede local e rode `docker compose up -d` de novo. Com o padrão `127.0.0.1`, só o
+Chrome conecta: o Firefox recusa endereços de loopback no WebRTC e fica em "Conectando à voz...".
+Use fones de ouvido: as duas janelas usam o mesmo
 microfone, e sem fone o som de uma volta pela outra.
 
 1. Abra `http://localhost:8080` e `http://127.0.0.1:8080`. O navegador trata os dois como sites
