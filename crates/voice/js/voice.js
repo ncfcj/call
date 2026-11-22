@@ -1,14 +1,21 @@
 // Ponte fina entre o crate `voice` (Rust) e o livekit-client (global `LivekitClient`, carregado
 // por web/vendor/livekit-client-*.umd.js).
 //
+// É um script comum (não um módulo) carregado pelo web/index.html, que expõe a classe no global
+// `CallVoice`. Assim o Trunk põe o hash do conteúdo no nome do arquivo e cada versão tem uma URL
+// nova. Como "snippet" do wasm-bindgen, a URL não mudava, e um navegador com a versão antiga em
+// cache recusava o arquivo novo (integridade) e o app abria em branco.
+//
 // Este é o único arquivo que conhece a API do LiveKit. Para o Rust ele expõe uma classe com
 // poucos métodos e um callback de eventos, sempre em JSON `{"t": "TIPO", "d": ...}`, que o lado
 // Rust desserializa em `VoiceEvent`. Mantenha os dois lados em sincronia.
 
-export class VoiceSession {
+class VoiceSession {
   constructor(onEvent) {
     this.onEvent = onEvent;
     this.room = null;
+    // Deaf: o áudio dos outros fica mudo, inclusive o de quem entrar depois.
+    this.deafened = false;
   }
 
   emit(t, d) {
@@ -38,7 +45,9 @@ export class VoiceSession {
     this.emit("PARTICIPANTS", this.participants());
   }
 
-  async connect(url, token) {
+  // `micEnabled` e `deafened` são o estado com que a pessoa entra (ela pode entrar mutada).
+  async connect(url, token, micEnabled, deafened) {
+    this.deafened = deafened;
     const LK = globalThis.LivekitClient;
     if (!LK) throw new Error("o livekit-client não carregou");
 
@@ -71,6 +80,7 @@ export class VoiceSession {
           el.dataset.voice = "remote";
           el.dataset.participant = participant.identity;
           el.dataset.track = publication.trackSid;
+          el.muted = this.deafened;
           document.body.appendChild(el);
         }
         update();
@@ -97,7 +107,8 @@ export class VoiceSession {
 
     await room.connect(url, token);
     try {
-      await room.localParticipant.setMicrophoneEnabled(true);
+      // Mutado na entrada: nem pede o microfone; ele só abre quando a pessoa desmutar.
+      if (micEnabled) await room.localParticipant.setMicrophoneEnabled(true);
     } catch (err) {
       // Sem microfone (negado ou ausente), a pessoa continua na sala só ouvindo.
       this.emit("MIC_ERROR", { message: String((err && err.message) || err) });
@@ -110,6 +121,14 @@ export class VoiceSession {
     if (!this.room) return;
     await this.room.localParticipant.setMicrophoneEnabled(enabled);
     this.emitParticipants();
+  }
+
+  // Deaf: silencia (ou volta) o áudio de todos os outros, sem sair da sala.
+  setDeafened(deafened) {
+    this.deafened = deafened;
+    document.querySelectorAll('audio[data-voice="remote"]').forEach((el) => {
+      el.muted = deafened;
+    });
   }
 
   // Destrava o áudio quando o navegador bloqueou a reprodução automática. Chame num clique.
@@ -139,3 +158,5 @@ export class VoiceSession {
     this.removeAudio(() => true);
   }
 }
+
+globalThis.CallVoice = { VoiceSession };

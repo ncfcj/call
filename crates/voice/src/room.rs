@@ -2,7 +2,8 @@ use wasm_bindgen::{JsCast, JsValue, prelude::*};
 
 use crate::VoiceEvent;
 
-#[wasm_bindgen(module = "/js/voice.js")]
+// `VoiceSession` vem de `js/voice.js`, carregado pelo web/index.html no global `CallVoice`.
+#[wasm_bindgen(js_namespace = CallVoice)]
 extern "C" {
     type VoiceSession;
 
@@ -10,7 +11,16 @@ extern "C" {
     fn new(on_event: &js_sys::Function) -> VoiceSession;
 
     #[wasm_bindgen(method, catch)]
-    async fn connect(this: &VoiceSession, url: &str, token: &str) -> Result<JsValue, JsValue>;
+    async fn connect(
+        this: &VoiceSession,
+        url: &str,
+        token: &str,
+        mic_enabled: bool,
+        deafened: bool,
+    ) -> Result<JsValue, JsValue>;
+
+    #[wasm_bindgen(method, js_name = setDeafened)]
+    fn set_deafened(this: &VoiceSession, deafened: bool);
 
     #[wasm_bindgen(method, catch, js_name = setMicrophoneEnabled)]
     async fn set_microphone_enabled(this: &VoiceSession, enabled: bool)
@@ -56,11 +66,22 @@ impl VoiceRoom {
         Self { session, _on_event: closure }
     }
 
-    /// Entra na sala e abre o microfone. Se o microfone falhar, entra só ouvindo e avisa com
-    /// `VoiceEvent::MicError`.
-    pub async fn connect(&self, url: &str, token: &str) -> Result<(), VoiceError> {
-        self.session.connect(url, token).await?;
+    /// Entra na sala. Com `mic_enabled`, abre o microfone; se ele falhar, entra só ouvindo e
+    /// avisa com `VoiceEvent::MicError`. Com `deafened`, o áudio dos outros já entra mudo.
+    pub async fn connect(
+        &self,
+        url: &str,
+        token: &str,
+        mic_enabled: bool,
+        deafened: bool,
+    ) -> Result<(), VoiceError> {
+        self.session.connect(url, token, mic_enabled, deafened).await?;
         Ok(())
+    }
+
+    /// Deaf: silencia o áudio de todos os outros (sem sair da sala), ou volta a ouvir.
+    pub fn set_deafened(&self, deafened: bool) {
+        self.session.set_deafened(deafened);
     }
 
     pub async fn set_microphone_enabled(&self, enabled: bool) -> Result<(), VoiceError> {

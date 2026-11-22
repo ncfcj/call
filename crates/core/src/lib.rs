@@ -7,10 +7,12 @@
 mod backoff;
 mod messages;
 mod typing;
+mod voice_controls;
 
 pub use backoff::Backoff;
 pub use messages::MessageLog;
 pub use typing::Typing;
+pub use voice_controls::VoiceControls;
 
 /// Estado do WebSocket, exibido na barra lateral.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

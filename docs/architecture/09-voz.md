@@ -50,8 +50,14 @@ do navegador (ou do WebView2 no Tauri) pelo SDK JavaScript, numa ponte em três 
 | Camada | Arquivo | O que faz |
 | --- | --- | --- |
 | SDK | `web/vendor/livekit-client-2.25.0.umd.js` | O `livekit-client` oficial (global `LivekitClient`), guardado no repositório e conferido pelo hash do npm (`web/vendor/README.md`) |
-| Ponte JS | `crates/voice/js/voice.js` | Classe `VoiceSession`: o único código que conhece a API do LiveKit. Emite eventos em JSON `{"t", "d"}` |
-| Ponte Rust | `crates/voice/src` | `VoiceRoom` (`connect`, `disconnect`, `set_microphone_enabled`, `start_audio`) e `VoiceEvent`, tipados |
+| Ponte JS | `crates/voice/js/voice.js` | Classe `VoiceSession` (global `CallVoice`): o único código que conhece a API do LiveKit. Emite eventos em JSON `{"t", "d"}` |
+| Ponte Rust | `crates/voice/src` | `VoiceRoom` (`connect`, `disconnect`, `set_microphone_enabled`, `set_deafened`, `start_audio`) e `VoiceEvent`, tipados |
+
+Os dois arquivos JS entram pelo `web/index.html` como `<script data-trunk>`, e o Trunk põe o hash
+do conteúdo no nome de cada um. A ponte não é um "snippet" do wasm-bindgen
+(`#[wasm_bindgen(module = ...)]`) de propósito: a URL de um snippet não muda quando o conteúdo
+muda, e um navegador com a versão antiga em cache recusava a nova pela integridade (SRI), e o
+app abria em branco.
 
 ```mermaid
 classDiagram
@@ -59,7 +65,8 @@ classDiagram
     class VoiceRoom {
         <<voice, wasm32>>
         +new(on_event) VoiceRoom
-        +connect(url, token)
+        +connect(url, token, mic, deaf)
+        +set_deafened(bool)
         +disconnect()
         +set_microphone_enabled(bool)
         +start_audio()
@@ -107,6 +114,16 @@ classDiagram
   Ao fechar a aba ou navegar para outra página, o SDK avisa o LiveKit no `pagehide` e a saída é
   imediata. Se a página morrer sem esse evento (processo encerrado, queda de rede), o LiveKit só
   percebe pela conexão, em uns 20 s.
+- **Mute e deaf** (`call_core::VoiceControls`, regras do Discord): o mute fecha só o
+  microfone; o deaf silencia os outros para você e também fecha o microfone, lembrando se você
+  já estava mutado; desmutar em deaf sai do deaf. Os botões ficam no painel do usuário e valem
+  dentro e fora de uma chamada (dá para entrar já mutado, sem nem abrir o microfone). Atalhos:
+  Ctrl+Shift+M e Ctrl+Shift+D. O estado fica no `localStorage` do navegador.
+- **Quem vê o quê:** o mute aparece para os outros na hora, pelo próprio LiveKit (a faixa do
+  microfone fica mutada). O deaf, por enquanto, só aparece para você: o estado de voz para os
+  outros chega pelo WebSocket na etapa do webhook.
+- **Detecção de voz:** o microfone fica aberto com o cancelamento de eco, a supressão de ruído
+  e o controle de ganho do navegador, e o anel verde usa os `ActiveSpeakers` do LiveKit.
 - **Sessão de voz numerada:** cada entrada incrementa um número; eventos de uma sala antiga que
   ainda está fechando são ignorados.
 
@@ -115,6 +132,6 @@ todos os membros chega com o webhook do LiveKit.
 
 ## Próximas etapas
 
-- Grupo com até 6 pessoas e o teste em redes diferentes.
-- Mute, deaf e detecção de voz; seletor de dispositivos.
+- Seletor de microfone e de saída de áudio.
+- Teste em redes diferentes (4G e Wi-Fi de outra casa).
 - Webhook do LiveKit e o estado de voz difundido pelo WebSocket do chat.

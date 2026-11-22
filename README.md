@@ -106,7 +106,10 @@ microfone, e sem fone o som de uma volta pela outra.
 3. Nas duas, clique no canal de voz **Geral** e permita o microfone. O painel "Voz conectada"
    aparece em cima do seu nome, e os dois nomes aparecem abaixo do canal.
 4. Fale: você se ouve na outra janela com um pequeno atraso, e o seu nome ganha um anel verde.
-5. Clique em **Sair** numa delas, ou feche a aba: o nome some da outra na hora.
+5. Teste o mute e o deaf pelos botões 🎤 e 🎧 ao lado do seu nome (ou Ctrl+Shift+M e
+   Ctrl+Shift+D). Com o mute, a outra janela mostra 🔇 no seu nome e para de ouvir você. Com o
+   deaf, você para de ouvir a outra janela e o seu microfone fecha. Desmutar em deaf volta tudo.
+6. Clique em **Sair** numa delas, ou feche a aba: o nome some da outra na hora.
 
 ## API
 

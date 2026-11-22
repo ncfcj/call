@@ -152,8 +152,8 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 
 - [x] `POST /channels/:id/voice/token`: confere a participação no servidor e emite um token LiveKit (sala = id do canal, TTL curto). Validade de 5 min, só microfone, até 10 pessoas por sala
 - [x] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz. O `livekit-client` 2.25.0 fica em `web/vendor/`, sem npm
-- [ ] 2b. Grupo de até 6 pessoas, com indicador de quem está falando
-- [ ] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído)
+- [x] 2b. Grupo de até 6 pessoas, com indicador de quem está falando. Testado com 6 participantes; o anel acompanha quem fala em menos de 1 s
+- [x] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído). Regras do Discord, atalhos Ctrl+Shift+M e Ctrl+Shift+D; o deaf só aparece para os outros com o webhook
 - [ ] Seletor de microfone e fone de saída
 - [ ] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat
 
@@ -165,8 +165,8 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 | --- | --- | --- |
 | Token de voz | Pronta | `scripts/teste-voz-token.ps1` |
 | Ponte `voice` e chamada 1:1 | Pronta | Manual, duas janelas (README) |
-| Grupo e indicador de quem fala | A fazer | |
-| Mute, deaf e detecção de voz | A fazer | |
+| Grupo e indicador de quem fala | Pronta | Robôs no navegador (6 participantes) |
+| Mute, deaf e detecção de voz | Pronta | Manual, duas janelas (README) |
 | Seletor de dispositivos | A fazer | |
 | Webhook e estado de voz no WebSocket | A fazer | |
 
@@ -261,6 +261,7 @@ O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs
 | Rust mínimo | 1.85 | 1.88 | O Leptos 0.8.23 exige 1.88. Com 1.85, ele ficava preso na 0.8.3, que avisava de código a ser recusado pelo Rust |
 | Endereço local | `127.0.0.1` | `BIND_ADDR` aceita vários endereços; o padrão escuta em `127.0.0.1` e `[::1]`, e `WEB_ORIGIN` inclui `http://[::1]:8080` | O `localhost` resolve primeiro para `::1`, e o Firefox não tenta o IPv4 depois |
 | IP da mídia do LiveKit em dev | `--node-ip 127.0.0.1` | `LIVEKIT_NODE_IP` no `.env`, com o IP da máquina na rede local | O Firefox não aceita candidatos ICE de loopback e a chamada nunca conectava |
+| Ponte JS da voz | Snippet do wasm-bindgen | `<script data-trunk>` com hash no nome, expondo o global `CallVoice` | A URL do snippet não mudava com o conteúdo; com a versão velha em cache, a integridade falhava e o app abria em branco |
 | URL da API no client | Fixa no build | Mesmo host da página, na porta 3000 (ou `CALL_API_URL` no build) | O navegador trata `localhost` e `127.0.0.1` como sites diferentes e não manda o cookie de refresh |
 
 Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, com um commit e um script de teste funcional em `scripts/` por etapa.

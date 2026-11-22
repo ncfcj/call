@@ -3928,6 +3928,7 @@ dependencies = [
  "leptos",
  "proto",
  "voice",
+ "web-sys",
 ]
 
 [[package]]

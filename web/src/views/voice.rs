@@ -40,11 +40,20 @@ pub fn VoiceChannel(channel: Channel) -> impl IntoView {
                 participants()
                     .into_iter()
                     .map(|(p, speaking)| {
+                        // O deaf dos outros só aparece com o estado de voz no WebSocket.
+                        let deaf = p.local && store.voice_controls.with(|c| c.deafened);
+                        let icon = if deaf {
+                            Some(("Sem som e sem microfone", "🎧✕"))
+                        } else if !p.mic {
+                            Some(("Microfone fechado", "🔇"))
+                        } else {
+                            None
+                        };
                         view! {
                             <li class:speaking=speaking class:muted=!p.mic>
                                 <span class="voice-dot"></span>
                                 {p.name}
-                                {(!p.mic).then_some(view! { <span class="mic-off" title="Microfone fechado">"🔇"</span> })}
+                                {icon.map(|(title, text)| view! { <span class="mic-off" title=title>{text}</span> })}
                             </li>
                         }
                     })
@@ -102,4 +111,60 @@ pub fn VoicePanel() -> impl IntoView {
                 })
         }}
     }
+}
+
+/// Botões de microfone e de fone, no painel do usuário. Valem dentro e fora de uma chamada.
+/// Atalhos: Ctrl+Shift+M (microfone) e Ctrl+Shift+D (fone).
+#[component]
+pub fn VoiceButtons() -> impl IntoView {
+    let store = expect_context::<Store>();
+    let controls = move || store.voice_controls.get();
+    view! {
+        <div class="voice-buttons">
+            <button
+                class="icon-button"
+                class:off=move || controls().mic_shown_muted()
+                aria-pressed=move || controls().mic_shown_muted().to_string()
+                title=move || {
+                    if controls().mic_shown_muted() { "Abrir o microfone (Ctrl+Shift+M)" } else { "Fechar o microfone (Ctrl+Shift+M)" }
+                }
+                on:click=move |_| store.toggle_mute()
+            >
+                {move || if controls().mic_shown_muted() { "🔇" } else { "🎤" }}
+            </button>
+            <button
+                class="icon-button"
+                class:off=move || controls().deafened
+                aria-pressed=move || controls().deafened.to_string()
+                title=move || {
+                    if controls().deafened { "Voltar a ouvir (Ctrl+Shift+D)" } else { "Parar de ouvir (Ctrl+Shift+D)" }
+                }
+                on:click=move |_| store.toggle_deaf()
+            >
+                {move || if controls().deafened { "🎧✕" } else { "🎧" }}
+            </button>
+        </div>
+    }
+}
+
+/// Atalhos globais de mute e deaf.
+pub fn install_shortcuts(store: Store) {
+    let handle = window_event_listener(leptos::ev::keydown, move |ev| {
+        if !(ev.ctrl_key() && ev.shift_key()) || ev.repeat() {
+            return;
+        }
+        match ev.key().to_ascii_lowercase().as_str() {
+            "m" => {
+                ev.prevent_default();
+                store.toggle_mute();
+            }
+            "d" => {
+                ev.prevent_default();
+                store.toggle_deaf();
+            }
+            _ => {}
+        }
+    });
+    // Vive enquanto o app estiver montado.
+    std::mem::forget(handle);
 }

@@ -257,6 +257,7 @@ fn UserPanel() -> impl IntoView {
                 <strong>{move || store.me.get().map(|u| u.display_name)}</strong>
                 <span class=move || format!("conn {}", status().0)>{move || status().1}</span>
             </div>
+            <super::voice::VoiceButtons />
             <button class="link" on:click=move |_| store.logout()>"Sair"</button>
         </footer>
     }

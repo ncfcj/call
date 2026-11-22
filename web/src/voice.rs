@@ -5,6 +5,7 @@
 
 use std::{collections::HashSet, rc::Rc};
 
+use call_core::VoiceControls;
 use leptos::{prelude::*, task::spawn_local};
 use proto::{ChannelId, GuildId};
 use voice::{VoiceEvent, VoiceParticipant, VoiceRoom};
@@ -70,7 +71,11 @@ impl Store {
             if !self.is_voice_current(session) {
                 return;
             }
-            if let Err(err) = room.connect(&token.url, &token.token).await {
+            let controls = self.voice_controls.get_untracked();
+            let connected = room
+                .connect(&token.url, &token.token, controls.mic_open(), controls.deafened)
+                .await;
+            if let Err(err) = connected {
                 room.disconnect().await;
                 if self.is_voice_current(session) {
                     self.drop_voice();
@@ -99,6 +104,29 @@ impl Store {
             self.voice_room.set_value(None);
             spawn_local(async move { room.disconnect().await });
         }
+    }
+
+    pub fn toggle_mute(self) {
+        self.voice_controls.update(VoiceControls::toggle_mute);
+        self.apply_controls();
+    }
+
+    pub fn toggle_deaf(self) {
+        self.voice_controls.update(VoiceControls::toggle_deaf);
+        self.apply_controls();
+    }
+
+    /// Guarda o mute e o deaf e aplica na sala aberta, se houver.
+    fn apply_controls(self) {
+        let controls = self.voice_controls.get_untracked();
+        save_controls(controls);
+        let Some(room) = self.voice_room.get_value() else { return };
+        room.set_deafened(controls.deafened);
+        spawn_local(async move {
+            if let Err(err) = room.set_microphone_enabled(controls.mic_open()).await {
+                self.notify(format!("O microfone não abriu ({err})."));
+            }
+        });
     }
 
     /// Destrava o áudio bloqueado pelo navegador. Chamado por um clique.
@@ -160,5 +188,25 @@ impl Store {
                 v.status = status;
             }
         });
+    }
+}
+
+const CONTROLS_KEY: &str = "call.voice.controls";
+
+fn storage() -> Option<web_sys::Storage> {
+    window().local_storage().ok().flatten()
+}
+
+/// Mute e deaf guardados no navegador (`"muted,deafened"`, com 0 e 1).
+pub fn load_controls() -> VoiceControls {
+    let saved = storage().and_then(|s| s.get_item(CONTROLS_KEY).ok().flatten()).unwrap_or_default();
+    let mut flags = saved.split(',').map(|v| v == "1");
+    VoiceControls { muted: flags.next().unwrap_or(false), deafened: flags.next().unwrap_or(false) }
+}
+
+fn save_controls(c: VoiceControls) {
+    if let Some(s) = storage() {
+        let _ =
+            s.set_item(CONTROLS_KEY, &format!("{},{}", u8::from(c.muted), u8::from(c.deafened)));
     }
 }
