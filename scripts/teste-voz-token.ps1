@@ -50,7 +50,12 @@ Write-Host "`nLiveKit"
 $http = $livekit -replace '^ws', 'http'
 $v = Get-Text "$http/rtc/validate?access_token=$($r.Body.token)"
 Test-Step "o LiveKit aceita o token" ($v.Status -eq 200) "(status $($v.Status): $($v.Text))"
-$adulterado = $r.Body.token.Substring(0, $r.Body.token.Length - 1) + "x"
+# Troca o primeiro caractere da assinatura. O último não serve: em base64url ele carrega só
+# 4 bits, e trocar "w" por "x", por exemplo, pode dar a mesma assinatura.
+$partes = $r.Body.token.Split(".")
+$troca = if ($partes[2][0] -eq "A") { "B" } else { "A" }
+$partes[2] = $troca + $partes[2].Substring(1)
+$adulterado = $partes -join "."
 $v = Get-Text "$http/rtc/validate?access_token=$adulterado"
 Test-Step "o LiveKit recusa um token adulterado" ($v.Status -eq 401) "(status $($v.Status))"
 
