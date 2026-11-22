@@ -139,7 +139,7 @@ Pronto quando: `GET /health` responde e o front carrega apontando para a API loc
 
 Pronto quando: dois usuários em navegadores diferentes trocam mensagens em tempo real. Um usuário fora do servidor não recebe eventos do canal. Reiniciar o backend não perde mensagens.
 
-**Situação: implementada, em validação.** Branch `fase-1`, PR #3 (rascunho; a autenticação já entrou na `main` pelo PR #1). Os três critérios têm testes de integração e foram conferidos no navegador, com um robô do outro lado da conversa (`scripts/teste-client.ps1`). Falta a sua validação no navegador antes de mergear.
+**Situação: concluída.** Entrou na `main` pelos PRs #1 (autenticação) e #3 (o resto da fase). Os três critérios têm testes de integração e foram conferidos no navegador.
 
 | Etapa | Commit | Teste funcional |
 | --- | --- | --- |
@@ -150,7 +150,7 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 
 ### Fase 2: voz com WebRTC (1 a 2 semanas)
 
-- [ ] `POST /channels/:id/voice/token`: confere a participação no servidor e emite um token LiveKit (sala = id do canal, TTL curto)
+- [x] `POST /channels/:id/voice/token`: confere a participação no servidor e emite um token LiveKit (sala = id do canal, TTL curto). Validade de 5 min, só microfone, até 10 pessoas por sala
 - [ ] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz
 - [ ] 2b. Grupo de até 6 pessoas, com indicador de quem está falando
 - [ ] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído)
@@ -158,6 +158,17 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 - [ ] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat
 
 Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conversam sem eco perceptível. Mute e deaf aparecem na barra lateral dos outros em menos de 1 s. Fechar a aba remove o usuário do canal.
+
+**Situação: em andamento.** Branch `fase-2`.
+
+| Etapa | Situação | Teste funcional |
+| --- | --- | --- |
+| Token de voz | Pronta | `scripts/teste-voz-token.ps1` |
+| Ponte `voice` e chamada 1:1 | A fazer | |
+| Grupo e indicador de quem fala | A fazer | |
+| Mute, deaf e detecção de voz | A fazer | |
+| Seletor de dispositivos | A fazer | |
+| Webhook e estado de voz no WebSocket | A fazer | |
 
 ### Fase 3: polimento e deploy (cerca de 1 semana)
 

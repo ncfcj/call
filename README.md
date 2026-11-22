@@ -77,6 +77,7 @@ powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
 | `teste-servidores.ps1` | Servidores, canais, convite, permissões de dono e histórico de mensagens |
 | `teste-websocket.ps1` | Ticket, heartbeat, inscrição, presença, digitação e mensagem em tempo real com três conexões |
 | `teste-client.ps1 -Convite <código>` | Um robô entra no seu servidor e conversa com você no navegador (veja abaixo) |
+| `teste-voz-token.ps1` | Token de voz: emissão, validação no próprio LiveKit e recusas |
 
 Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
 
@@ -110,6 +111,7 @@ porque a sessão fica num cookie por navegador.
 | `GET/POST /channels/{id}/messages` | Bearer | Histórico paginado (`before`, `after`, `limit`) e envio de mensagem |
 | `POST /ws/ticket` | Bearer | Ticket de uso único (30 s) para abrir o WebSocket |
 | `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat |
+| `POST /channels/{id}/voice/token` | Bearer | Token do LiveKit para entrar no canal de voz (membros, 5 min) |
 
 O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
 `Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.

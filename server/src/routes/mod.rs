@@ -4,6 +4,7 @@ mod guilds;
 mod health;
 mod messages;
 mod users;
+mod voice;
 
 use axum::{
     Router,
@@ -29,6 +30,7 @@ pub fn router(state: AppState) -> Router {
         .route("/invites/{code}", post(guilds::join))
         .route("/channels/{id}", patch(channels::update).delete(channels::delete))
         .route("/channels/{id}/messages", get(messages::list).post(messages::create))
+        .route("/channels/{id}/voice/token", post(voice::token))
         .route("/ws/ticket", post(ws::ticket))
         .route("/ws", get(ws::upgrade))
         .with_state(state)

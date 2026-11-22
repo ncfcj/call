@@ -29,8 +29,13 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await.context("falha ao aplicar migrations")?;
 
-    let state =
-        AppState::new(db, &config.jwt_secret, config.cookie_secure, config.web_origins.clone());
+    let state = AppState::new(
+        db,
+        &config.jwt_secret,
+        config.cookie_secure,
+        config.web_origins.clone(),
+        config.livekit.clone(),
+    );
     let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
     // Um listener por endereço, todos com o mesmo app (o mesmo estado e o mesmo hub).

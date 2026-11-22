@@ -29,6 +29,8 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+livekit-api = { version = "0.11", default-features = false, features = ["access-token", "webhooks"] }
+livekit-protocol = "0.9"
 
 [dev-dependencies]
 futures-util = "0.3"

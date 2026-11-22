@@ -16,6 +16,8 @@ pub struct Config {
     pub jwt_secret: String,
     /// `Secure` no cookie de refresh. Só desligue em desenvolvimento sem HTTPS.
     pub cookie_secure: bool,
+    /// LiveKit: URL que os clients usam e as chaves para assinar os tokens de voz.
+    pub livekit: crate::voice::LiveKit,
 }
 
 impl Config {
@@ -60,7 +62,14 @@ impl Config {
             Ok(other) => bail!("COOKIE_SECURE deve ser true ou false, não {other:?}"),
         };
 
-        Ok(Self { database_url, bind_addrs, web_origins, jwt_secret, cookie_secure })
+        let livekit = crate::voice::LiveKit::new(
+            std::env::var("LIVEKIT_URL")
+                .context("defina LIVEKIT_URL (ex.: ws://localhost:7880)")?,
+            std::env::var("LIVEKIT_API_KEY").context("defina LIVEKIT_API_KEY")?,
+            std::env::var("LIVEKIT_API_SECRET").context("defina LIVEKIT_API_SECRET")?,
+        );
+
+        Ok(Self { database_url, bind_addrs, web_origins, jwt_secret, cookie_secure, livekit })
     }
 
     /// CORS restrito às origens do client. Lembrete: CORS não protege WebSocket;
