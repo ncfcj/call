@@ -266,4 +266,17 @@ mod tests {
         assert_eq!(v.clear_channel(c).len(), 1);
         assert!(v.guild(g).is_empty());
     }
+
+    #[test]
+    fn clearing_a_guild_keeps_the_others() {
+        let (g, c, _, u) = ids();
+        let (g2, c2) = (GuildId(Uuid::from_u128(9)), ChannelId(Uuid::from_u128(10)));
+        let other = UserId(Uuid::from_u128(200));
+        let v = VoiceStates::new();
+        v.join(g, c, u, None);
+        v.join(g2, c2, other, None);
+        v.clear_guild(g);
+        assert!(v.guild(g).is_empty());
+        assert_eq!(v.guild(g2).len(), 1);
+    }
 }

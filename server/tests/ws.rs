@@ -409,6 +409,26 @@ async fn members_see_who_is_in_voice_with_mute_and_deaf(db: PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn room_finished_takes_everyone_out(db: PgPool) {
+    let server = serve(db).await;
+    let ana = user(&server, "ana").await;
+    let bia = user(&server, "bia").await;
+    let (g, _) = guild_with_two_members(&server, &ana, &bia).await;
+    let voice = voice_channel(&server, &ana, &g).await;
+    let mut ws_ana = Client::connect(&server, &ana).await;
+    ws_ana.subscribe(&g).await;
+
+    webhook(&server, participant_event("participant_joined", &voice, &bia, "PA_1"), true).await;
+    ws_ana.next_of("VOICE_STATE_UPDATE").await;
+    let finished =
+        json!({"event": "room_finished", "id": "EV_fim", "room": {"name": voice, "sid": "RM_1"}});
+    assert_eq!(webhook(&server, finished, true).await, StatusCode::OK);
+    let update = ws_ana.next_of("VOICE_STATE_UPDATE").await;
+    assert_eq!(update["d"]["user_id"], bia.id.as_str());
+    assert_eq!(update["d"]["channel_id"], Value::Null);
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn client_declared_channel_and_validation(db: PgPool) {
     let server = serve(db).await;
     let ana = user(&server, "ana").await;

@@ -76,7 +76,10 @@ if (tool === "Bash" || tool === "PowerShell") {
       first.match(/^(Select-String|sls)\b(.*)$/i);
     if (!m) continue;
     const tokens = (m[2].match(/"[^"]*"|'[^']*'|\S+/g) ?? []).map((t) => t.replace(/^["']|["']$/g, ""));
-    const paths = tokens.filter((t) => !t.startsWith("-") && /[\\/.~$]/.test(t));
+    const args = tokens.filter((t) => !t.startsWith("-"));
+    // No grep/rg/git grep o 1º argumento é o padrão, não um caminho (a menos que venha com -e).
+    const patternFirst = /grep|rg/.test(m[1]) && !tokens.some((t) => /^-(e|f|-regexp)/.test(t));
+    const paths = (patternFirst ? args.slice(1) : args).filter((t) => /[\\/.~$]/.test(t));
     const searched = paths.length ? paths : ["."];
     // Busca só fora do repositório, ou só em arquivos que o índice não cobre: passa.
     if (searched.every((p) => !inRepo(p.replace(/\$\{?(HOME|TMP|TEMP|USERPROFILE)\}?/, process.env.USERPROFILE ?? "~")))) continue;
