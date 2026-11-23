@@ -175,11 +175,36 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 - [ ] VM Oracle com Caddy (TLS automático) na frente do binário Rust, serviço `systemd` e Neon em produção
 - [ ] Front no Cloudflare Pages, com CORS restrito ao domínio dele
 - [ ] Rate limit em login e envio de mensagens. Tamanho máximo de mensagem
-- [ ] Logs estruturados com `tracing` e um painel simples de uso das cotas (minutos do LiveKit, armazenamento do Neon)
+- [ ] Monitoramento e observabilidade: logs, métricas, alertas e um painel de uso das cotas (minutos do LiveKit, armazenamento do Neon). Detalhes abaixo
 - [ ] Retenção de mensagens de texto (TTL), para guardar o mínimo necessário. Detalhes abaixo
 - [ ] Build Tauri para Windows (instalador MSI ou NSIS) com o mesmo client Leptos. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
 
 Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o consumo do mês dentro das cotas gratuitas.
+
+#### Monitoramento e observabilidade
+
+Objetivo: saber que algo quebrou antes de um usuário avisar, e ter o contexto para descobrir por quê. Hoje o servidor já loga com `tracing` no terminal e tem `GET /health`; não há métricas, alertas nem logs guardados fora da máquina.
+
+Ferramentas previstas, todas com plano gratuito:
+
+| Necessidade | Ferramenta | Plano gratuito |
+| --- | --- | --- |
+| Logs, métricas e painéis | Grafana Cloud (Loki, Prometheus/Mimir, Grafana), com o Grafana Alloy na VM coletando | 50 GB de logs, 10 mil séries de métricas, 14 dias de retenção |
+| Erros com stack trace (servidor e client WASM) | Sentry (crate `sentry` com integração `tracing`; SDK de browser no client) | 5 mil erros por mês |
+| Disponibilidade vista de fora | UptimeRobot ou Better Stack, batendo em `/health` | Checagem a cada 5 min (UptimeRobot) ou 3 min (Better Stack) |
+| Alertas | Grafana Alerting, com aviso por e-mail ou Discord/Telegram | Incluído no Grafana Cloud |
+
+Etapas:
+
+- [ ] **Logs estruturados:** `tracing-subscriber` em JSON em produção (texto legível em dev), com `request_id` por requisição (`tower-http` `TraceLayer`), usuário, guild e canal nos spans. Nunca logar senha, token, cookie nem o texto das mensagens
+- [ ] **Métricas:** endpoint `/metrics` em formato Prometheus (crate `metrics` + `metrics-exporter-prometheus`), fechado para a internet. Medir: latência e status por rota, conexões WebSocket abertas, mensagens por minuto, participantes em voz, falhas de login, tamanho do pool do Postgres. O LiveKit já expõe as próprias métricas (`prometheus_port`)
+- [ ] **Health mais completo:** `/health` passa a conferir o Postgres e o LiveKit, para a checagem externa pegar uma dependência fora do ar
+- [ ] **Erros:** Sentry no servidor (panics e `AppError` 5xx) e no client (erros de JS e panics do WASM via `console_error_panic_hook`)
+- [ ] **Alertas:** servidor fora do ar por mais de 2 checagens; taxa de 5xx acima de 1% em 5 min; latência p95 acima de 500 ms; pico de falhas de login (possível força bruta); cotas acima de 80% (minutos do LiveKit, armazenamento do Neon, egress da Oracle); disco ou memória da VM acima de 85%
+- [ ] **Painel:** uma tela no Grafana com uso, erros, latência e cotas do mês
+- [ ] **Retenção dos logs:** prazo curto (14 dias, o do plano gratuito), coerente com o TTL das mensagens e com a Fase 4
+
+Pronto quando: derrubar o servidor ou o Postgres de propósito gera um alerta em poucos minutos, um erro 500 aparece no Sentry com a requisição que o causou, e o painel mostra o consumo das cotas do mês.
 
 #### Retenção de mensagens (TTL)
 
