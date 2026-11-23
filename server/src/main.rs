@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Context;
 use sqlx::postgres::PgPoolOptions;
@@ -46,7 +46,7 @@ async fn main() -> anyhow::Result<()> {
             .with_context(|| format!("não foi possível escutar em {addr}"))?;
         tracing::info!("call-server ouvindo em http://{}", listener.local_addr()?);
         servers.spawn(
-            axum::serve(listener, app.clone())
+            axum::serve(listener, app.clone().into_make_service_with_connect_info::<SocketAddr>())
                 .with_graceful_shutdown(shutdown_signal())
                 .into_future(),
         );

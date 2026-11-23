@@ -2,9 +2,12 @@
 
 #![allow(dead_code)] // cada arquivo de teste usa uma parte
 
+use std::net::SocketAddr;
+
 use axum::{
     Router,
     body::Body,
+    extract::connect_info::MockConnectInfo,
     http::{HeaderValue, Request, StatusCode, header},
 };
 use call_server::{routes, state::AppState, voice::LiveKit};
@@ -31,6 +34,7 @@ pub fn app(db: PgPool) -> Router {
         vec![HeaderValue::from_static(WEB_ORIGIN)],
         LiveKit::new(LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET),
     ))
+    .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 9))))
 }
 
 pub struct Reply {

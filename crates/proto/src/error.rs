@@ -19,6 +19,8 @@ pub enum ErrorCode {
     /// Autenticado, mas sem permissão (por exemplo, quem não é dono tentando apagar o servidor).
     Forbidden,
     NotFound,
+    /// Requisições demais; o header `Retry-After` diz quantos segundos esperar.
+    RateLimited,
     Internal,
     /// Código que esta versão do client ainda não conhece.
     #[serde(other)]
@@ -31,7 +33,7 @@ mod tests {
 
     #[test]
     fn unknown_code_does_not_break_old_clients() {
-        let body = r#"{"code":"rate_limited","message":"devagar"}"#;
+        let body = r#"{"code":"codigo_do_futuro","message":"x"}"#;
         let err: ErrorResponse = serde_json::from_str(body).unwrap();
         assert_eq!(err.code, ErrorCode::Unknown);
     }

@@ -146,6 +146,7 @@ pub async fn create(
     Path(channel): Path<ChannelId>,
     Json(req): Json<CreateMessageRequest>,
 ) -> AppResult<(StatusCode, Json<Message>)> {
+    state.limits.message.check(user)?;
     let access = text_channel(&state, channel, user).await?;
     validate_message_content(&req.content).map_err(AppError::Validation)?;
 

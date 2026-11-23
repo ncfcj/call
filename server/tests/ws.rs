@@ -271,6 +271,16 @@ async fn presence_goes_online_and_offline(db: PgPool) {
 }
 
 #[sqlx::test(migrations = "../migrations")]
+async fn oversized_message_closes_the_connection(db: PgPool) {
+    let server = serve(db).await;
+    let ana = user(&server, "ana").await;
+    let mut ws = Client::connect(&server, &ana).await;
+    let _ = ws.socket.send(Message::text("x".repeat(64 * 1024 + 1))).await;
+    let next = tokio::time::timeout(WAIT, ws.socket.next()).await.expect("a conexão segue aberta");
+    assert!(!matches!(next, Some(Ok(Message::Text(_)))), "não responde: {next:?}");
+}
+
+#[sqlx::test(migrations = "../migrations")]
 async fn leaving_the_guild_stops_its_events(db: PgPool) {
     let server = serve(db).await;
     let ana = user(&server, "ana").await;

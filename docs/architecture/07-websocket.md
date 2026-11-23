@@ -33,6 +33,7 @@ sequenceDiagram
 - **Ticket:** `GET /ws` sem ticket válido responde 401, e um ticket já usado também.
 - **Origin:** um `Origin` fora de `WEB_ORIGIN` responde 403, porque CORS não protege
   WebSocket. Um client fora do navegador não manda `Origin` e passa só pelo ticket.
+- **Tamanho:** uma mensagem acima de 64 KB derruba a conexão.
 - **Heartbeat:** sem nenhuma mensagem do client por 60 s (duas vezes o intervalo), o servidor
   fecha a conexão.
 

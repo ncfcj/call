@@ -25,6 +25,7 @@ use crate::{
     access::{channel_member, guild_member},
     auth::AuthUser,
     error::{AppError, AppResult},
+    routes::MAX_BODY,
     state::AppState,
 };
 use hub::ConnId;
@@ -38,11 +39,12 @@ const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(60);
 pub async fn ticket(
     State(state): State<AppState>,
     AuthUser(user): AuthUser,
-) -> Json<WsTicketResponse> {
-    Json(WsTicketResponse {
+) -> AppResult<Json<WsTicketResponse>> {
+    state.limits.ws_ticket.check(user)?;
+    Ok(Json(WsTicketResponse {
         ticket: state.tickets.issue(user),
         expires_in: ticket::TICKET_TTL.as_secs(),
-    })
+    }))
 }
 
 /// `GET /ws?ticket=...`: faz o upgrade.
@@ -61,6 +63,8 @@ pub async fn upgrade(
         return Err(AppError::Forbidden("origem não permitida"));
     }
     let user = state.tickets.redeem(&q.ticket).ok_or(AppError::Unauthorized)?;
+    // O padrão do axum aceita mensagens de 64 MB.
+    let ws = ws.max_message_size(MAX_BODY).max_frame_size(MAX_BODY);
     Ok(ws.on_upgrade(move |socket| run(state, user, socket)))
 }
 

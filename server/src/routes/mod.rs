@@ -8,10 +8,15 @@ pub(crate) mod voice;
 
 use axum::{
     Router,
+    extract::DefaultBodyLimit,
+    middleware::map_response,
     routing::{delete, get, patch, post},
 };
 
-use crate::{state::AppState, ws};
+use crate::{error::json_errors, state::AppState, ws};
+
+/// Folgado para uma mensagem de 4000 caracteres, mesmo toda escapada no JSON (48 KB).
+pub(crate) const MAX_BODY: usize = 64 * 1024;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
@@ -34,5 +39,7 @@ pub fn router(state: AppState) -> Router {
         .route("/livekit/webhook", post(voice::webhook))
         .route("/ws/ticket", post(ws::ticket))
         .route("/ws", get(ws::upgrade))
+        .layer(DefaultBodyLimit::max(MAX_BODY))
+        .layer(map_response(json_errors))
         .with_state(state)
 }

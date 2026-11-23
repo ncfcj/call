@@ -84,6 +84,7 @@ powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
 | `teste-websocket.ps1` | Ticket, heartbeat, inscrição, presença, digitação e mensagem em tempo real com três conexões |
 | `teste-client.ps1 -Convite <código>` | Um robô entra no seu servidor e conversa com você no navegador (veja abaixo) |
 | `teste-voz-token.ps1` | Token de voz: emissão, validação no próprio LiveKit e recusas |
+| `teste-rate-limit.ps1` | Limite de tentativas (429), tamanho do corpo (413) e formato dos erros |
 | (manual) | Chamada de voz entre duas janelas (veja abaixo) |
 
 Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.

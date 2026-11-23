@@ -182,7 +182,7 @@ Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o c
 
 Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o deploy, por fim o desktop e o teste de aceite. Cada uma é um commit com um teste funcional, como nas fases anteriores.
 
-- [ ] **3a. API pronta para a internet.** Rate limit por IP e por usuário em `/auth/login`, `/auth/register`, `/auth/refresh`, `POST /ws/ticket`, envio de mensagens e token de voz (respondendo `429` com `Retry-After`). Limite de tamanho do corpo das requisições. Erros de extração (JSON malformado, UUID inválido) no formato `{code, message}`, fechando a pendência. Conferir a validação do `Origin` no WebSocket com a lista de produção
+- [x] **3a. API pronta para a internet.** Rate limit por IP em `/auth/login`, `/auth/register` e `/auth/refresh`, e por usuário em `POST /ws/ticket`, envio de mensagens e token de voz (respondendo `429` com `Retry-After`). Limite de 64 KB no corpo das requisições e nas mensagens do WebSocket. Erros de extração (JSON malformado, UUID inválido) no formato `{code, message}`, fechando a pendência. Conferir a validação do `Origin` no WebSocket com a lista de produção
 - [ ] **3b. Retenção de mensagens (TTL).** Expurgo periódico e aviso no client. Detalhes abaixo
 - [ ] **3c. API em produção.** VM Oracle (Arm) com o binário `aarch64` compilado no CI, serviço `systemd` com usuário próprio, Caddy na frente com TLS automático (inclusive para o WebSocket), Neon como banco e migrations aplicadas no deploy. Segredos (`JWT_SECRET`, chaves do LiveKit, URL do banco) só no arquivo de ambiente da VM. SSH só por chave, firewall com 22, 80 e 443. Um `scripts/deploy.ps1` para repetir o deploy
 - [ ] **3d. Front no Cloudflare Pages.** Build do Trunk com `CALL_API_URL` de produção, `WEB_ORIGIN` da API restrito ao domínio do front e cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`) no `_headers` do Pages
@@ -343,7 +343,8 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 ### Pendências conhecidas
 
 - **Cookie no deploy (Fase 3):** o refresh usa `SameSite=Lax` e funciona com o client e a API no mesmo site. Com o Cloudflare Pages e a VM em domínios diferentes, vai precisar de `SameSite=None` ou de um subdomínio em comum.
-- **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
+- **Eventos do WebSocket sem limite de frequência:** `SUBSCRIBE`, `TYPING_START` e `VOICE_STATE_UPDATE` consultam o banco a cada evento, e uma conexão pode mandá-los sem parar.
+- **Limite do login só por IP:** um ataque a uma mesma conta, vindo de muitos IPs, não é barrado. Travar por conta deixaria qualquer um bloquear o login de outra pessoa.
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
 - **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
