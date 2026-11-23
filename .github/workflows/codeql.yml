@@ -24,8 +24,8 @@ jobs:
         # Rust e JS sem build (build-mode none); actions analisa os próprios workflows.
         language: [rust, javascript-typescript, actions]
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
+      - uses: actions/checkout@v7
+      - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: none
@@ -35,6 +35,6 @@ jobs:
               # SDK do LiveKit, código de terceiros minificado.
               - web/vendor
               - web/dist
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
         with:
           category: /language:${{ matrix.language }}
