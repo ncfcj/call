@@ -85,9 +85,18 @@ powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
 | `teste-client.ps1 -Convite <código>` | Um robô entra no seu servidor e conversa com você no navegador (veja abaixo) |
 | `teste-voz-token.ps1` | Token de voz: emissão, validação no próprio LiveKit e recusas |
 | `teste-rate-limit.ps1` | Limite de tentativas (429), tamanho do corpo (413) e formato dos erros |
+| (manual) | Retenção de mensagens (veja abaixo) |
 | (manual) | Chamada de voz entre duas janelas (veja abaixo) |
 
 Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
+
+**Retenção de mensagens:** este comando põe uma mensagem de 40 dias atrás em cada canal de texto.
+Recarregue a página para vê-la; depois reinicie o servidor (ele expurga na subida) e recarregue de
+novo: ela some, e o começo do histórico avisa do prazo.
+
+```powershell
+docker compose exec postgres psql -U call -d call -c "INSERT INTO messages (id, channel_id, content) SELECT (lpad(to_hex((extract(epoch from now() - interval '40 days') * 1000)::bigint), 12, '0') || '7000' || '8' || substr(md5(id::text), 1, 15))::uuid, id, 'mensagem vencida' FROM channels WHERE kind = 'text'"
+```
 
 **Client no navegador.** Com o servidor e o `trunk serve` rodando:
 

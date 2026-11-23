@@ -92,6 +92,7 @@ impl Client {
         assert_eq!(hello["t"], "HELLO");
         assert_eq!(hello["d"]["heartbeat_interval_ms"], 30_000);
         assert_eq!(hello["d"]["user_id"], u.id.as_str());
+        assert_eq!(hello["d"]["message_ttl_days"], 30);
         client
     }
 

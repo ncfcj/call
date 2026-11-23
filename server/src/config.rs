@@ -18,6 +18,8 @@ pub struct Config {
     pub cookie_secure: bool,
     /// LiveKit: URL que os clients usam e as chaves para assinar os tokens de voz.
     pub livekit: crate::voice::LiveKit,
+    /// Dias até uma mensagem ser apagada de vez.
+    pub message_ttl_days: u32,
 }
 
 impl Config {
@@ -73,7 +75,25 @@ impl Config {
             var("LIVEKIT_API_SECRET").context("defina LIVEKIT_API_SECRET")?,
         );
 
-        Ok(Self { database_url, bind_addrs, web_origins, jwt_secret, cookie_secure, livekit })
+        // Zero ou um valor ilegível não pode virar "apague tudo".
+        let message_ttl_days = match var("MESSAGE_TTL_DAYS") {
+            None => 30,
+            Some(days) => {
+                days.parse().ok().filter(|days| (1..=36_500).contains(days)).with_context(|| {
+                    format!("MESSAGE_TTL_DAYS deve ficar entre 1 e 36500, não {days:?}")
+                })?
+            }
+        };
+
+        Ok(Self {
+            database_url,
+            bind_addrs,
+            web_origins,
+            jwt_secret,
+            cookie_secure,
+            livekit,
+            message_ttl_days,
+        })
     }
 
     /// CORS restrito às origens do client. Lembrete: CORS não protege WebSocket;
@@ -149,6 +169,11 @@ mod tests {
             ("WEB_ORIGIN", ",", "pelo menos uma origem"),
             ("JWT_SECRET", "curto", "32 caracteres"),
             ("COOKIE_SECURE", "sim", "true ou false"),
+            ("MESSAGE_TTL_DAYS", "0", "entre 1 e 36500"),
+            // Uma data tão longe estouraria a conta e derrubaria o expurgo.
+            ("MESSAGE_TTL_DAYS", "4000000000", "entre 1 e 36500"),
+            ("MESSAGE_TTL_DAYS", "-1", "entre 1 e 36500"),
+            ("MESSAGE_TTL_DAYS", "", "entre 1 e 36500"),
         ];
         for (name, value, expected) in cases {
             let mut v = base();
@@ -176,6 +201,14 @@ mod tests {
         assert!(!load(&v).unwrap().cookie_secure);
         v.insert("COOKIE_SECURE", "true".into());
         assert!(load(&v).unwrap().cookie_secure);
+    }
+
+    #[test]
+    fn messages_last_30_days_by_default() {
+        let mut v = base();
+        assert_eq!(load(&v).unwrap().message_ttl_days, 30);
+        v.insert("MESSAGE_TTL_DAYS", "1".into());
+        assert_eq!(load(&v).unwrap().message_ttl_days, 1);
     }
 
     #[test]

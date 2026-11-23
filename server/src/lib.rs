@@ -6,6 +6,7 @@ pub mod auth;
 pub mod config;
 pub mod error;
 pub mod limit;
+pub mod retention;
 pub mod routes;
 pub mod state;
 pub mod voice;

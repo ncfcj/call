@@ -72,7 +72,11 @@ async fn run(state: AppState, user: UserId, mut socket: WebSocket) {
     let (conn, mut queue) = state.hub.register(user);
     tracing::debug!(conn, %user, "WS conectado");
 
-    let hello = ServerEvent::Hello { heartbeat_interval_ms: HEARTBEAT_INTERVAL_MS, user_id: user };
+    let hello = ServerEvent::Hello {
+        heartbeat_interval_ms: HEARTBEAT_INTERVAL_MS,
+        user_id: user,
+        message_ttl_days: Some(state.message_ttl_days),
+    };
     let mut deadline = Instant::now() + HEARTBEAT_TIMEOUT;
 
     if send(&mut socket, &hello).await {

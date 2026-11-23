@@ -5,7 +5,7 @@ use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-use call_server::{config::Config, routes, state::AppState};
+use call_server::{config::Config, retention, routes, state::AppState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,12 +29,15 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await.context("falha ao aplicar migrations")?;
 
+    tokio::spawn(retention::run(db.clone(), config.message_ttl_days));
+
     let state = AppState::new(
         db,
         &config.jwt_secret,
         config.cookie_secure,
         config.web_origins.clone(),
         config.livekit.clone(),
+        config.message_ttl_days,
     );
     let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 

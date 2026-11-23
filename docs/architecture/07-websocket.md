@@ -49,7 +49,7 @@ Formato no fio: `{"t": "<TIPO>", "d": {...}}`.
 
 | Do servidor | Dados | Quando |
 | --- | --- | --- |
-| `HELLO` | `heartbeat_interval_ms`, `user_id` | Logo após o upgrade |
+| `HELLO` | `heartbeat_interval_ms`, `user_id`, `message_ttl_days` | Logo após o upgrade |
 | `HEARTBEAT_ACK` | | Resposta ao `HEARTBEAT` |
 | `SUBSCRIBED` | `guild_id`, `online` | Resposta ao `SUBSCRIBE`, com quem está online no servidor |
 | `MESSAGE_CREATE` | a `Message` inteira | Depois de `POST /channels/{id}/messages` gravar a mensagem |

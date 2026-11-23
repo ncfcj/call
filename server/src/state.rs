@@ -24,6 +24,8 @@ pub struct AppState {
     pub livekit: Arc<LiveKit>,
     pub voice_states: Arc<VoiceStates>,
     pub limits: Arc<Limits>,
+    /// Prazo das mensagens, para o client avisar até onde vai o histórico.
+    pub message_ttl_days: u32,
 }
 
 impl AppState {
@@ -33,6 +35,7 @@ impl AppState {
         cookie_secure: bool,
         web_origins: Vec<HeaderValue>,
         livekit: LiveKit,
+        message_ttl_days: u32,
     ) -> Self {
         Self {
             db,
@@ -44,6 +47,7 @@ impl AppState {
             livekit: Arc::new(livekit),
             voice_states: Arc::new(VoiceStates::new()),
             limits: Arc::default(),
+            message_ttl_days,
         }
     }
 }

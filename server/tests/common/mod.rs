@@ -33,6 +33,7 @@ pub fn app(db: PgPool) -> Router {
         true,
         vec![HeaderValue::from_static(WEB_ORIGIN)],
         LiveKit::new(LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET),
+        30,
     ))
     .layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 9))))
 }

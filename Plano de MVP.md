@@ -183,7 +183,7 @@ Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o c
 Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o deploy, por fim o desktop e o teste de aceite. Cada uma é um commit com um teste funcional, como nas fases anteriores.
 
 - [x] **3a. API pronta para a internet.** Rate limit por IP em `/auth/login`, `/auth/register` e `/auth/refresh`, e por usuário em `POST /ws/ticket`, envio de mensagens e token de voz (respondendo `429` com `Retry-After`). Limite de 64 KB no corpo das requisições e nas mensagens do WebSocket. Erros de extração (JSON malformado, UUID inválido) no formato `{code, message}`, fechando a pendência. Conferir a validação do `Origin` no WebSocket com a lista de produção
-- [ ] **3b. Retenção de mensagens (TTL).** Expurgo periódico e aviso no client. Detalhes abaixo
+- [x] **3b. Retenção de mensagens (TTL).** Expurgo periódico e aviso no client. Detalhes abaixo
 - [ ] **3c. API em produção.** VM Oracle (Arm) com o binário `aarch64` compilado no CI, serviço `systemd` com usuário próprio, Caddy na frente com TLS automático (inclusive para o WebSocket), Neon como banco e migrations aplicadas no deploy. Segredos (`JWT_SECRET`, chaves do LiveKit, URL do banco) só no arquivo de ambiente da VM. SSH só por chave, firewall com 22, 80 e 443. Um `scripts/deploy.ps1` para repetir o deploy
 - [ ] **3d. Front no Cloudflare Pages.** Build do Trunk com `CALL_API_URL` de produção, `WEB_ORIGIN` da API restrito ao domínio do front e cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`) no `_headers` do Pages
 - [ ] **3e. Voz em produção.** Projeto no LiveKit Cloud (ou o self-host), webhook apontando para `https://api.<domínio>/livekit/webhook` e as chaves no ambiente da VM. Fecha o critério pendente da Fase 2: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa)
@@ -229,17 +229,17 @@ Pronto quando: derrubar o servidor ou o Postgres de propósito gera um alerta em
 
 #### Retenção de mensagens (TTL)
 
-Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento para de crescer com o tempo de uso. Hoje toda mensagem fica para sempre. Uma mensagem curta ocupa de 150 a 300 bytes com o índice, e o Neon Free tem 1 GB.
+Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento para de crescer com o tempo de uso. Uma mensagem curta ocupa de 150 a 300 bytes com o índice, e o Neon Free tem 1 GB.
 
 Decisões a tomar:
 
-- [ ] **Prazo padrão.** Sugestão: 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
-- [ ] **Quem escolhe.** Um prazo global no servidor (`MESSAGE_TTL_DAYS`) ou um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
+- [x] **Prazo padrão.** 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
+- [x] **Quem escolhe.** Um prazo global (`MESSAGE_TTL_DAYS`). A outra opção era um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
 - [ ] **Limite por quantidade.** Opcional: manter no máximo N mensagens por canal, além do prazo
 
 Implementação prevista:
 
-- **Expurgo periódico:** uma tarefa no próprio `call-server` (um `tokio::time::interval`, por exemplo a cada hora) apaga em lotes as mensagens vencidas. Como o id é UUIDv7, o tempo está no próprio id: dá para apagar com `WHERE id < <UUIDv7 do instante de corte>` usando o índice que já existe.
+- **Expurgo periódico:** uma tarefa no próprio `call-server` (um `tokio::time::interval`, na subida e a cada 6 h, para não acordar o Neon à toa) apaga em lotes as mensagens vencidas. Como o id é UUIDv7, o tempo está no próprio id: dá para apagar com `WHERE id < <UUIDv7 do instante de corte>` usando o índice que já existe.
 - **Espaço de volta no disco:** no Postgres, um `DELETE` não devolve espaço na hora; o `VACUUM` só reaproveita o espaço. Se o volume crescer, particionar `messages` por mês e apagar a partição inteira (`DROP TABLE`), que devolve o espaço na hora e não gera trabalho de `VACUUM`.
 - **Client:** o histórico termina no limite do prazo. A tela avisa algo como "mensagens com mais de 30 dias são apagadas", e o `has_older` do `MessageLog` fica falso ao chegar lá.
 - **Reconexão:** um client que ficar offline por mais tempo que o prazo simplesmente não recupera o que venceu. O `?after=<id>` continua funcionando.
@@ -348,7 +348,6 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
 - **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
-- **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
 - **`chrono` sem manutenção (RUSTSEC-2026-0543):** vem do `sqlx` e da `livekit-api`; a exceção está no `deny.toml`. Migrar para `time` ou `jiff` quando as dependências permitirem.
 
