@@ -29,6 +29,7 @@ fn App() -> impl IntoView {
     let store = Store::new(ApiClient::new(api_url()));
     provide_context(store);
     store.boot();
+    views::voice::install_shortcuts(store);
 
     view! {
         <Show when=move || store.notice.get().is_some()>

@@ -139,7 +139,7 @@ Pronto quando: `GET /health` responde e o front carrega apontando para a API loc
 
 Pronto quando: dois usuários em navegadores diferentes trocam mensagens em tempo real. Um usuário fora do servidor não recebe eventos do canal. Reiniciar o backend não perde mensagens.
 
-**Situação: implementada, em validação.** Branch `fase-1`, PR #3 (rascunho; a autenticação já entrou na `main` pelo PR #1). Os três critérios têm testes de integração e foram conferidos no navegador, com um robô do outro lado da conversa (`scripts/teste-client.ps1`). Falta a sua validação no navegador antes de mergear.
+**Situação: concluída.** Entrou na `main` pelos PRs #1 (autenticação) e #3 (o resto da fase). Os três critérios têm testes de integração e foram conferidos no navegador.
 
 | Etapa | Commit | Teste funcional |
 | --- | --- | --- |
@@ -150,24 +150,81 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 
 ### Fase 2: voz com WebRTC (1 a 2 semanas)
 
-- [ ] `POST /channels/:id/voice/token`: confere a participação no servidor e emite um token LiveKit (sala = id do canal, TTL curto)
-- [ ] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz
-- [ ] 2b. Grupo de até 6 pessoas, com indicador de quem está falando
-- [ ] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído)
-- [ ] Seletor de microfone e fone de saída
-- [ ] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat
+- [x] `POST /channels/:id/voice/token`: confere a participação no servidor e emite um token LiveKit (sala = id do canal, TTL curto). Validade de 5 min, só microfone, até 10 pessoas por sala
+- [x] 2a. Ponte do crate voice (wasm-bindgen com livekit-client) e call 1:1 entrando e saindo do canal de voz. O `livekit-client` 2.25.0 fica em `web/vendor/`, sem npm
+- [x] 2b. Grupo de até 6 pessoas, com indicador de quem está falando. Testado com 6 participantes; o anel acompanha quem fala em menos de 1 s
+- [x] Mute, deaf e modo detecção de voz (microfone aberto com supressão de ruído). Regras do Discord, atalhos Ctrl+Shift+M e Ctrl+Shift+D; o deaf só aparece para os outros com o webhook
+- [x] Seletor de microfone e fone de saída. Vale no meio da chamada e fica guardado; dispositivo desconectado cai no padrão
+- [x] Endpoint de webhook do LiveKit, mais um mapa de estado de voz difundido pelo WS de chat. O client também avisa o canal, o mute e o deaf pelo WS; a saída de uma conexão antiga (outra aba) não tira ninguém da lista
 
 Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conversam sem eco perceptível. Mute e deaf aparecem na barra lateral dos outros em menos de 1 s. Fechar a aba remove o usuário do canal.
+
+**Situação: implementada, em validação.** Branch `fase-2`, PR #4. O critério "redes diferentes (4G e Wi-Fi de outra casa)" depende do LiveKit acessível de fora da rede local, e fica para o deploy da Fase 3 (ou um teste com o LiveKit Cloud). Mute e deaf chegam à barra lateral dos outros em poucos milissegundos, e fechar a aba tira a pessoa do canal na hora.
+
+| Etapa | Situação | Teste funcional |
+| --- | --- | --- |
+| Token de voz | Pronta | `scripts/teste-voz-token.ps1` |
+| Ponte `voice` e chamada 1:1 | Pronta | Manual, duas janelas (README) |
+| Grupo e indicador de quem fala | Pronta | Robôs no navegador (6 participantes) |
+| Mute, deaf e detecção de voz | Pronta | Manual, duas janelas (README) |
+| Seletor de dispositivos | Pronta | Manual (README) |
+| Webhook e estado de voz no WebSocket | Pronta | Manual, duas janelas (README) |
 
 ### Fase 3: polimento e deploy (cerca de 1 semana)
 
 - [ ] VM Oracle com Caddy (TLS automático) na frente do binário Rust, serviço `systemd` e Neon em produção
 - [ ] Front no Cloudflare Pages, com CORS restrito ao domínio dele
 - [ ] Rate limit em login e envio de mensagens. Tamanho máximo de mensagem
-- [ ] Logs estruturados com `tracing` e um painel simples de uso das cotas (minutos do LiveKit, armazenamento do Neon)
+- [ ] Monitoramento e observabilidade: logs, métricas, alertas e um painel de uso das cotas (minutos do LiveKit, armazenamento do Neon). Detalhes abaixo
+- [ ] Retenção de mensagens de texto (TTL), para guardar o mínimo necessário. Detalhes abaixo
 - [ ] Build Tauri para Windows (instalador MSI ou NSIS) com o mesmo client Leptos. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
 
 Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o consumo do mês dentro das cotas gratuitas.
+
+#### Monitoramento e observabilidade
+
+Objetivo: saber que algo quebrou antes de um usuário avisar, e ter o contexto para descobrir por quê. Hoje o servidor já loga com `tracing` no terminal e tem `GET /health`; não há métricas, alertas nem logs guardados fora da máquina.
+
+Ferramentas previstas, todas com plano gratuito:
+
+| Necessidade | Ferramenta | Plano gratuito |
+| --- | --- | --- |
+| Logs, métricas e painéis | Grafana Cloud (Loki, Prometheus/Mimir, Grafana), com o Grafana Alloy na VM coletando | 50 GB de logs, 10 mil séries de métricas, 14 dias de retenção |
+| Erros com stack trace (servidor e client WASM) | Sentry (crate `sentry` com integração `tracing`; SDK de browser no client) | 5 mil erros por mês |
+| Disponibilidade vista de fora | UptimeRobot ou Better Stack, batendo em `/health` | Checagem a cada 5 min (UptimeRobot) ou 3 min (Better Stack) |
+| Alertas | Grafana Alerting, com aviso por e-mail ou Discord/Telegram | Incluído no Grafana Cloud |
+
+Etapas:
+
+- [ ] **Logs estruturados:** `tracing-subscriber` em JSON em produção (texto legível em dev), com `request_id` por requisição (`tower-http` `TraceLayer`), usuário, guild e canal nos spans. Nunca logar senha, token, cookie nem o texto das mensagens
+- [ ] **Métricas:** endpoint `/metrics` em formato Prometheus (crate `metrics` + `metrics-exporter-prometheus`), fechado para a internet. Medir: latência e status por rota, conexões WebSocket abertas, mensagens por minuto, participantes em voz, falhas de login, tamanho do pool do Postgres. O LiveKit já expõe as próprias métricas (`prometheus_port`)
+- [ ] **Health mais completo:** `/health` passa a conferir o Postgres e o LiveKit, para a checagem externa pegar uma dependência fora do ar
+- [ ] **Erros:** Sentry no servidor (panics e `AppError` 5xx) e no client (erros de JS e panics do WASM via `console_error_panic_hook`)
+- [ ] **Alertas:** servidor fora do ar por mais de 2 checagens; taxa de 5xx acima de 1% em 5 min; latência p95 acima de 500 ms; pico de falhas de login (possível força bruta); cotas acima de 80% (minutos do LiveKit, armazenamento do Neon, egress da Oracle); disco ou memória da VM acima de 85%
+- [ ] **Painel:** uma tela no Grafana com uso, erros, latência e cotas do mês
+- [ ] **Retenção dos logs:** prazo curto (14 dias, o do plano gratuito), coerente com o TTL das mensagens e com a Fase 4
+
+Pronto quando: derrubar o servidor ou o Postgres de propósito gera um alerta em poucos minutos, um erro 500 aparece no Sentry com a requisição que o causou, e o painel mostra o consumo das cotas do mês.
+
+#### Retenção de mensagens (TTL)
+
+Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento para de crescer com o tempo de uso. Hoje toda mensagem fica para sempre. Uma mensagem curta ocupa de 150 a 300 bytes com o índice, e o Neon Free tem 1 GB.
+
+Decisões a tomar:
+
+- [ ] **Prazo padrão.** Sugestão: 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
+- [ ] **Quem escolhe.** Um prazo global no servidor (`MESSAGE_TTL_DAYS`) ou um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
+- [ ] **Limite por quantidade.** Opcional: manter no máximo N mensagens por canal, além do prazo
+
+Implementação prevista:
+
+- **Expurgo periódico:** uma tarefa no próprio `call-server` (um `tokio::time::interval`, por exemplo a cada hora) apaga em lotes as mensagens vencidas. Como o id é UUIDv7, o tempo está no próprio id: dá para apagar com `WHERE id < <UUIDv7 do instante de corte>` usando o índice que já existe.
+- **Espaço de volta no disco:** no Postgres, um `DELETE` não devolve espaço na hora; o `VACUUM` só reaproveita o espaço. Se o volume crescer, particionar `messages` por mês e apagar a partição inteira (`DROP TABLE`), que devolve o espaço na hora e não gera trabalho de `VACUUM`.
+- **Client:** o histórico termina no limite do prazo. A tela avisa algo como "mensagens com mais de 30 dias são apagadas", e o `has_older` do `MessageLog` fica falso ao chegar lá.
+- **Reconexão:** um client que ficar offline por mais tempo que o prazo simplesmente não recupera o que venceu. O `?after=<id>` continua funcionando.
+- **Medição:** o painel de cotas mostra o tamanho da tabela (`pg_total_relation_size('messages')`) e quantas mensagens o expurgo apagou.
+
+Pronto quando: mensagens mais velhas que o prazo somem sozinhas, o tamanho de `messages` se estabiliza com o uso contínuo, e o client deixa claro até onde vai o histórico.
 
 ### Fase 4: segurança dos dados (pós-MVP, data a definir)
 
@@ -193,6 +250,54 @@ Impactos a considerar antes de escolher:
 
 Pronto quando: o nível escolhido está implementado, um dump do banco não revela o texto das mensagens, e (no nível B) o SFU encaminha áudio que ele mesmo não consegue decifrar.
 
+## Qualidade e segurança do código
+
+Portões no CI, todos gratuitos (detalhes em `docs/qualidade.md`). O check `ci-ok` só fica verde
+se todos passarem.
+
+- [x] Formatação e análise estática: `clippy` com regras do workspace (`[workspace.lints]`), nos dois alvos
+- [x] 100% dos testes passando: unitários e de integração com Postgres, com relatório de cobertura (`cargo-llvm-cov`)
+- [x] Testes de mutação (`cargo-mutants`): nas linhas alteradas de cada PR e no workspace inteiro toda semana
+- [x] Dependências: vulnerabilidades (RustSec), licenças, crates banidos e origens (`cargo-deny`)
+- [x] Atualizações automáticas de dependências e Actions (Dependabot)
+- [x] Análise semântica de segurança com CodeQL (Rust, JavaScript da ponte de voz e workflows)
+- [x] Bloquear o merge sem o `ci-ok` verde: repositório público e proteção da `main` (check `ci-ok`, PR obrigatório, vale para administradores)
+
+Próximas etapas sugeridas, em ordem de custo-benefício:
+
+| Etapa | Para quê | Ferramenta gratuita |
+| --- | --- | --- |
+| Varredura de segredos | Barrar `.env`, `JWT_SECRET` e chaves no repositório, no CI e antes do commit | gitleaks |
+| Testes de ponta a ponta no navegador | Automatizar o que hoje é manual: login, chat em duas sessões e voz com microfone falso | Playwright (Chromium e Firefox) |
+| Testes por propriedade | Gerar milhares de entradas para as validações, o `MessageLog` e o `VoiceStates` | proptest |
+| Fuzzing | Achar pânicos nos parsers que recebem dados de fora: eventos do WebSocket, webhook do LiveKit | cargo-fuzz |
+| Teste de carga | Medir quantas conexões e mensagens o hub aguenta antes do deploy | k6 |
+| Varredura dinâmica (DAST) | Conferir cabeçalhos de segurança, CORS e cookies no ambiente publicado | OWASP ZAP (baseline) |
+| Imagens e VM | Vulnerabilidades no sistema e nas imagens Docker do deploy | Trivy |
+| SBOM | Inventário das dependências de cada versão publicada | cargo-cyclonedx |
+| Ganchos locais | Rodar `fmt` e `clippy` antes de cada commit | git hooks (pre-commit) |
+| Trocar o `chrono` | Sair do crate sem manutenção quando o `sqlx` e a `livekit-api` permitirem | `time` ou `jiff` |
+
+## Ideias para o futuro (opcionais, sem data)
+
+Conceitos anotados para revisitar depois do MVP. Nenhum está planejado nem tem implementação decidida.
+
+### Controle remoto do computador compartilhado (estilo AnyDesk e TeamViewer)
+
+Quem compartilha a tela pode dar a outra pessoa o controle do mouse e do teclado do seu computador, dentro de uma chamada.
+
+- Depende de compartilhamento de tela, que está fora do MVP.
+- O host precisa autorizar cada sessão de controle e poder revogar na hora.
+- Exige o app desktop (Tauri) no host: o navegador não consegue injetar mouse e teclado no sistema.
+
+### Jogo e controle remoto (estilo Parsec)
+
+O convidado usa o próprio controle (gamepad), mouse e teclado, e o programa envia esses comandos ao host, que os aplica como se fossem um controle local. A ideia é jogar junto um jogo que roda só na máquina do host.
+
+- Precisa de vídeo com latência muito baixa e taxa de quadros alta, bem mais exigente que a voz.
+- No host, precisa de um controle virtual para o sistema reconhecer o gamepad remoto.
+- Também exige o app desktop no host e a autorização explícita dele.
+
 ## Decisões tomadas na implementação
 
 O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs/architecture/`.
@@ -208,6 +313,8 @@ O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs
 | Dono do servidor | Não definido | Não pode sair; para isso, apaga o servidor. Sem transferência de dono | Mantém o MVP simples |
 | Rust mínimo | 1.85 | 1.88 | O Leptos 0.8.23 exige 1.88. Com 1.85, ele ficava preso na 0.8.3, que avisava de código a ser recusado pelo Rust |
 | Endereço local | `127.0.0.1` | `BIND_ADDR` aceita vários endereços; o padrão escuta em `127.0.0.1` e `[::1]`, e `WEB_ORIGIN` inclui `http://[::1]:8080` | O `localhost` resolve primeiro para `::1`, e o Firefox não tenta o IPv4 depois |
+| IP da mídia do LiveKit em dev | `--node-ip 127.0.0.1` | `LIVEKIT_NODE_IP` no `.env`, com o IP da máquina na rede local | O Firefox não aceita candidatos ICE de loopback e a chamada nunca conectava |
+| Ponte JS da voz | Snippet do wasm-bindgen | `<script data-trunk>` com hash no nome, expondo o global `CallVoice` | A URL do snippet não mudava com o conteúdo; com a versão velha em cache, a integridade falhava e o app abria em branco |
 | URL da API no client | Fixa no build | Mesmo host da página, na porta 3000 (ou `CALL_API_URL` no build) | O navegador trata `localhost` e `127.0.0.1` como sites diferentes e não manda o cookie de refresh |
 
 Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, com um commit e um script de teste funcional em `scripts/` por etapa.
@@ -218,7 +325,10 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
+- **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
+- **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
+- **`chrono` sem manutenção (RUSTSEC-2026-0543):** vem do `sqlx` e da `livekit-api`; a exceção está no `deny.toml`. Migrar para `time` ou `jiff` quando as dependências permitirem.
 
 ## Riscos técnicos e mitigação
 

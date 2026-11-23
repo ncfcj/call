@@ -283,4 +283,76 @@ mod tests {
         assert_eq!(events.last().unwrap()["d"]["status"], "offline");
         assert!(!hub.inner.lock().unwrap().conns.contains_key(&b));
     }
+
+    #[test]
+    fn publish_skips_the_sender_and_other_guilds() {
+        let hub = Hub::new();
+        let guild = GuildId(Uuid::from_u128(9));
+        let other = GuildId(Uuid::from_u128(8));
+        let (a, mut rx_a) = hub.register(user(1));
+        let (b, mut rx_b) = hub.register(user(2));
+        let (c, mut rx_c) = hub.register(user(3));
+        hub.subscribe(a, guild);
+        hub.subscribe(b, guild);
+        hub.subscribe(c, other);
+        drain(&mut rx_a);
+        drain(&mut rx_b);
+        drain(&mut rx_c);
+
+        hub.publish(guild, &ServerEvent::HeartbeatAck, Some(a));
+        assert!(drain(&mut rx_a).is_empty(), "quem enviou não recebe o próprio evento");
+        assert_eq!(drain(&mut rx_b).len(), 1);
+        assert!(drain(&mut rx_c).is_empty(), "outro servidor não recebe");
+    }
+
+    #[test]
+    fn removed_member_stops_receiving_and_goes_offline() {
+        let hub = Hub::new();
+        let guild = GuildId(Uuid::from_u128(9));
+        let (a, mut rx_a) = hub.register(user(1));
+        let (b, mut rx_b) = hub.register(user(2));
+        hub.subscribe(a, guild);
+        hub.subscribe(b, guild);
+        drain(&mut rx_a);
+
+        hub.remove_member(guild, user(2));
+        let events = drain(&mut rx_a);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0]["d"]["status"], "offline");
+        drain(&mut rx_b);
+        hub.publish(guild, &ServerEvent::HeartbeatAck, None);
+        assert!(drain(&mut rx_b).is_empty());
+        assert_eq!(drain(&mut rx_a).len(), 1);
+    }
+
+    #[test]
+    fn removed_guild_reaches_nobody() {
+        let hub = Hub::new();
+        let guild = GuildId(Uuid::from_u128(9));
+        let (a, mut rx_a) = hub.register(user(1));
+        hub.subscribe(a, guild);
+        hub.remove_guild(guild);
+        hub.publish(guild, &ServerEvent::HeartbeatAck, None);
+        assert!(drain(&mut rx_a).is_empty());
+        assert_eq!(hub.subscribe(a, guild), vec![user(1)], "pode se inscrever de novo");
+    }
+
+    #[test]
+    fn unknown_connection_cannot_subscribe() {
+        let hub = Hub::new();
+        assert!(hub.subscribe(999, GuildId(Uuid::from_u128(9))).is_empty());
+        hub.unregister(999);
+    }
+
+    #[test]
+    fn subscribe_lists_each_online_user_once_in_order() {
+        let hub = Hub::new();
+        let guild = GuildId(Uuid::from_u128(9));
+        let (b1, _r1) = hub.register(user(2));
+        let (b2, _r2) = hub.register(user(2));
+        let (a, _r3) = hub.register(user(1));
+        hub.subscribe(b1, guild);
+        hub.subscribe(b2, guild);
+        assert_eq!(hub.subscribe(a, guild), vec![user(1), user(2)]);
+    }
 }

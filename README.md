@@ -53,11 +53,17 @@ O `release` padrão otimiza o servidor para velocidade. O client usa o perfil `w
 
 ## Qualidade
 
+O CI barra o PR se algum destes portões falhar: formatação, análise estática (clippy com as
+regras do workspace, nos dois alvos), 100% dos testes passando, build do client, dependências
+(vulnerabilidades e licenças) e testes de mutação. Detalhes, e como rodar cada um localmente, em
+[docs/qualidade.md](docs/qualidade.md).
+
 ```powershell
 cargo fmt --all
-cargo clippy -p proto -p call-server --all-targets -- -D warnings
+cargo clippy --workspace --all-targets -- -D warnings
 cargo clippy -p proto -p api-client -p call-core -p voice -p web --all-targets --target wasm32-unknown-unknown -- -D warnings
-cargo test -p proto -p call-server
+cargo test --workspace
+cargo deny check
 ```
 
 Os testes de integração do servidor (`server/tests/`) precisam do Postgres do `docker compose`
@@ -77,6 +83,8 @@ powershell -ExecutionPolicy Bypass -File scripts\teste-servidores.ps1
 | `teste-servidores.ps1` | Servidores, canais, convite, permissões de dono e histórico de mensagens |
 | `teste-websocket.ps1` | Ticket, heartbeat, inscrição, presença, digitação e mensagem em tempo real com três conexões |
 | `teste-client.ps1 -Convite <código>` | Um robô entra no seu servidor e conversa com você no navegador (veja abaixo) |
+| `teste-voz-token.ps1` | Token de voz: emissão, validação no próprio LiveKit e recusas |
+| (manual) | Chamada de voz entre duas janelas (veja abaixo) |
 
 Os dados criados ficam no banco local, e o script mostra no fim o login de um usuário de teste.
 
@@ -91,6 +99,33 @@ Os dados criados ficam no banco local, e o script mostra no fim o login de um us
 
 Para conversar entre duas pessoas de verdade, use dois navegadores (ou uma janela anônima),
 porque a sessão fica num cookie por navegador.
+
+**Chamada de voz entre duas janelas.** Antes, ponha em `LIVEKIT_NODE_IP` (no `.env`) o IP desta
+máquina na rede local e rode `docker compose up -d` de novo. Com o padrão `127.0.0.1`, só o
+Chrome conecta: o Firefox recusa endereços de loopback no WebRTC e fica em "Conectando à voz...".
+Use fones de ouvido: as duas janelas usam o mesmo
+microfone, e sem fone o som de uma volta pela outra.
+
+1. Abra `http://localhost:8080` e `http://127.0.0.1:8080`. O navegador trata os dois como sites
+   diferentes, então cada um tem a própria sessão: entre com uma conta em cada.
+2. Na primeira, crie um servidor; na segunda, entre pelo código de convite.
+3. Nas duas, clique no canal de voz **Geral** e permita o microfone. O painel "Voz conectada"
+   aparece em cima do seu nome, e os dois nomes aparecem abaixo do canal.
+4. Fale: você se ouve na outra janela com um pequeno atraso, e o seu nome ganha um anel verde.
+5. Teste o mute e o deaf pelos botões 🎤 e 🎧 ao lado do seu nome (ou Ctrl+Shift+M e
+   Ctrl+Shift+D). Com o mute, a outra janela mostra 🔇 no seu nome e para de ouvir você. Com o
+   deaf, você para de ouvir a outra janela e o seu microfone fecha. Desmutar em deaf volta tudo.
+6. No ⚙ ao lado do seu nome, troque o microfone ou a saída de áudio (por exemplo, para um fone
+   USB ou Bluetooth) com a chamada aberta: a troca vale na hora e continua escolhida depois de
+   recarregar a página.
+7. Saia da chamada numa das janelas e continue olhando a barra lateral dela: a outra pessoa
+   continua aparecendo embaixo de **Geral**, com o 🔇 ou o 🎧✕ quando ela muta ou liga o deaf.
+   Quem está fora da chamada vê quem está dentro.
+8. Clique em **Sair** na janela que ficou na chamada, ou feche a aba: o nome some da outra na
+   hora.
+
+Antes desse teste, reinicie o `cargo run -p call-server` e rode `docker compose up -d`: o
+LiveKit avisa o servidor de quem entra e sai pelo webhook `POST /livekit/webhook`.
 
 ## API
 
@@ -109,7 +144,9 @@ porque a sessão fica num cookie por navegador.
 | `GET/POST /guilds/{id}/channels`, `PATCH/DELETE /channels/{id}` | Bearer | Canais de texto e voz (mudanças só para o dono) |
 | `GET/POST /channels/{id}/messages` | Bearer | Histórico paginado (`before`, `after`, `limit`) e envio de mensagem |
 | `POST /ws/ticket` | Bearer | Ticket de uso único (30 s) para abrir o WebSocket |
-| `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE` e heartbeat |
+| `GET /ws?ticket=...` | ticket | WebSocket do chat: `SUBSCRIBE`, `MESSAGE_CREATE`, `TYPING_START`, `PRESENCE_UPDATE`, `VOICE_STATE_UPDATE` e heartbeat |
+| `POST /channels/{id}/voice/token` | Bearer | Token do LiveKit para entrar no canal de voz (membros, 5 min) |
+| `POST /livekit/webhook` | assinatura do LiveKit | Entrou e saiu das salas de voz; vira `VOICE_STATE_UPDATE` no WebSocket |
 
 O access token (JWT, 15 min) vai no corpo da resposta e é enviado como
 `Authorization: Bearer`. O refresh token (30 dias) fica num cookie `HttpOnly` com `Path=/auth`.

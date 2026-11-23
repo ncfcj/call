@@ -34,7 +34,10 @@ pub fn spawn(store: Store, epoch: u64) {
                             backoff.reset();
                             store.ws_tx.set_value(Some(tx.clone()));
                             store.conn.set(ConnState::Connected);
-                            heartbeat(tx.clone(), *heartbeat_interval_ms as u32);
+                            heartbeat(
+                                tx.clone(),
+                                u32::try_from(*heartbeat_interval_ms).unwrap_or(u32::MAX),
+                            );
                             store.on_connected();
                         }
                         store.apply(event);
@@ -46,7 +49,7 @@ pub fn spawn(store: Store, epoch: u64) {
                     }
                 }
                 Err(api_client::ws::WsError::Api(err)) if err.is_unauthorized() => {
-                    store.report(err);
+                    store.report(&err);
                     return;
                 }
                 Err(err) => leptos::logging::warn!("WebSocket: {err}"),
@@ -57,7 +60,7 @@ pub fn spawn(store: Store, epoch: u64) {
 
             // Espera com contagem regressiva na tela.
             let delay = backoff.next_delay(js_sys::Math::random());
-            let mut remaining_ms = delay.as_millis() as u32;
+            let mut remaining_ms = u32::try_from(delay.as_millis()).unwrap_or(u32::MAX);
             while remaining_ms > 0 && store.is_current(epoch) {
                 store.conn.set(ConnState::Reconnecting { in_secs: remaining_ms.div_ceil(1000) });
                 let step = remaining_ms.min(1000);

@@ -1,6 +1,9 @@
 //! Tela principal: servidores, canais, mensagens e membros.
 
-use call_core::ConnState;
+use call_core::{
+    ConnState,
+    ui::{initials, starts_group, typing_label},
+};
 use leptos::{
     ev::{KeyboardEvent, SubmitEvent},
     html,
@@ -41,14 +44,6 @@ pub fn ChatPage() -> impl IntoView {
     }
 }
 
-fn initials(name: &str) -> String {
-    name.split_whitespace()
-        .filter_map(|w| w.chars().next())
-        .take(2)
-        .collect::<String>()
-        .to_uppercase()
-}
-
 #[component]
 fn GuildBar(adding: RwSignal<bool>) -> impl IntoView {
     let store = expect_context::<Store>();
@@ -63,7 +58,7 @@ fn GuildBar(adding: RwSignal<bool>) -> impl IntoView {
                         <button
                             class="guild-icon"
                             class:active=move || store.selected_guild.get() == Some(id)
-                            title=guild.name.clone()
+                            title=guild.name
                             on:click=move |_| store.select_guild(id)
                         >
                             {initials(&guild.name)}
@@ -186,11 +181,7 @@ fn ChannelSidebar() -> impl IntoView {
                     each=move || channels(ChannelKind::Voice)
                     key=|c: &Channel| (c.id, c.name.clone())
                     children=move |channel: Channel| {
-                        view! {
-                            <div class="channel voice" title="A voz chega na Fase 2">
-                                "🔊 " {channel.name}
-                            </div>
-                        }
+                        view! { <super::voice::VoiceChannel channel /> }
                     }
                 />
                 <Show when=is_owner>
@@ -209,6 +200,7 @@ fn ChannelSidebar() -> impl IntoView {
                     </button>
                 </Show>
             </Show>
+            <super::voice::VoicePanel />
             <UserPanel />
         </aside>
     }
@@ -260,6 +252,7 @@ fn UserPanel() -> impl IntoView {
                 <strong>{move || store.me.get().map(|u| u.display_name)}</strong>
                 <span class=move || format!("conn {}", status().0)>{move || status().1}</span>
             </div>
+            <super::voice::VoiceButtons />
             <button class="link" on:click=move |_| store.logout()>"Sair"</button>
         </footer>
     }
@@ -269,14 +262,6 @@ fn UserPanel() -> impl IntoView {
 fn clock(message: &Message) -> String {
     let date = js_sys::Date::new(&(message.created_at.timestamp_millis() as f64).into());
     format!("{:02}:{:02}", date.get_hours(), date.get_minutes())
-}
-
-/// Mostra o cabeçalho (autor e hora) quando muda o autor ou passam 5 min.
-fn starts_group(prev: Option<&Message>, message: &Message) -> bool {
-    let Some(prev) = prev else { return true };
-    let same_author = prev.author.as_ref().map(|a| a.id) == message.author.as_ref().map(|a| a.id);
-    let gap = message.created_at - prev.created_at;
-    !same_author || gap.num_minutes() >= 5
 }
 
 #[component]
@@ -362,11 +347,7 @@ fn MessagePane() -> impl IntoView {
             .filter(|u| Some(*u) != me)
             .map(|u| store.display_name(guild, u))
             .collect();
-        match names.as_slice() {
-            [] => None,
-            [one] => Some(format!("{one} está digitando...")),
-            many => Some(format!("{} estão digitando...", many.join(", "))),
-        }
+        typing_label(&names)
     };
 
     view! {

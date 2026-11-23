@@ -100,7 +100,7 @@ pub async fn create(
             .bind(user.0)
             .execute(&mut *tx)
             .await?;
-        for (position, (channel, kind)) in DEFAULT_CHANNELS.iter().enumerate() {
+        for (position, (channel, kind)) in (0_i32..).zip(DEFAULT_CHANNELS.iter()) {
             sqlx::query(
                 "INSERT INTO channels (id, guild_id, name, kind, position)
                  VALUES ($1, $2, $3, $4, $5)",
@@ -109,7 +109,7 @@ pub async fn create(
             .bind(id.0)
             .bind(channel)
             .bind(kind.as_str())
-            .bind(position as i32)
+            .bind(position)
             .execute(&mut *tx)
             .await?;
         }
@@ -177,6 +177,7 @@ pub async fn delete(
     guild_member(&state.db, id, user).await?.require_owner()?;
     sqlx::query("DELETE FROM guilds WHERE id = $1").bind(id.0).execute(&state.db).await?;
     state.hub.remove_guild(id);
+    state.voice_states.clear_guild(id);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -231,6 +232,7 @@ pub async fn leave(
         .execute(&state.db)
         .await?;
     state.hub.remove_member(id, user);
+    super::voice::publish_voice(&state, state.voice_states.remove_member(id, user));
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -267,5 +269,31 @@ mod tests {
         assert_eq!(code.len(), INVITE_LEN);
         assert!(code.bytes().all(|b| INVITE_ALPHABET.contains(&b)));
         assert_ne!(invite_code(), code, "dois códigos seguidos iguais é improvável");
+    }
+
+    #[test]
+    fn guild_name_is_trimmed_and_validated() {
+        assert_eq!(clean_name("  Amigos  ").unwrap(), "Amigos");
+        assert!(matches!(clean_name("   "), Err(AppError::Validation(_))));
+    }
+
+    #[test]
+    fn guild_row_becomes_a_guild() {
+        let row = GuildRow {
+            id: Uuid::from_u128(1),
+            name: "Amigos".into(),
+            owner_id: Uuid::from_u128(2),
+            invite_code: "abcdEFGH".into(),
+        };
+        let guild = Guild::from(row);
+        assert_eq!(guild.id, GuildId(Uuid::from_u128(1)));
+        assert_eq!(guild.owner_id, UserId(Uuid::from_u128(2)));
+        assert_eq!((guild.name.as_str(), guild.invite_code.as_str()), ("Amigos", "abcdEFGH"));
+    }
+
+    #[test]
+    fn default_channels_are_one_text_and_one_voice() {
+        let kinds: Vec<_> = DEFAULT_CHANNELS.iter().map(|(_, k)| *k).collect();
+        assert_eq!(kinds, [ChannelKind::Text, ChannelKind::Voice]);
     }
 }

@@ -11,6 +11,8 @@ mod gateway;
 mod store;
 #[cfg(target_arch = "wasm32")]
 mod views;
+#[cfg(target_arch = "wasm32")]
+mod voice;
 
 #[cfg(target_arch = "wasm32")]
 fn main() {
@@ -18,6 +20,8 @@ fn main() {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+// Fora do navegador, a única coisa útil é dizer como rodar o client.
+#[allow(clippy::print_stderr)]
 fn main() {
     eprintln!("O client roda no navegador. Rode `trunk serve` dentro de web/.");
 }

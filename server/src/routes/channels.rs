@@ -91,5 +91,20 @@ pub async fn delete(
 ) -> AppResult<StatusCode> {
     channel_member(&state.db, channel, user).await?.guild.require_owner()?;
     sqlx::query("DELETE FROM channels WHERE id = $1").bind(channel.0).execute(&state.db).await?;
+    // Quem estava na voz do canal apagado sai da lista. A sala no LiveKit fica até as pessoas
+    // saírem; o client não deixa entrar de novo num canal que não existe mais.
+    super::voice::publish_voice(&state, state.voice_states.clear_channel(channel));
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn channel_name_is_trimmed_and_validated() {
+        assert_eq!(clean_name(" jogos ").unwrap(), "jogos");
+        assert!(matches!(clean_name(""), Err(AppError::Validation(_))));
+        assert!(matches!(clean_name(&"a".repeat(101)), Err(AppError::Validation(_))));
+    }
 }

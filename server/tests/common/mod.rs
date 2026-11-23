@@ -7,7 +7,7 @@ use axum::{
     body::Body,
     http::{HeaderValue, Request, StatusCode, header},
 };
-use call_server::{routes, state::AppState};
+use call_server::{routes, state::AppState, voice::LiveKit};
 use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use sqlx::PgPool;
@@ -16,10 +16,21 @@ use tower::ServiceExt;
 /// Origem aceita no upgrade do WebSocket nos testes.
 pub const WEB_ORIGIN: &str = "http://localhost:8080";
 
+/// Chaves do `livekit-server --dev` (as mesmas do docker compose).
+pub const LIVEKIT_URL: &str = "ws://localhost:7880";
+pub const LIVEKIT_KEY: &str = "devkey";
+pub const LIVEKIT_SECRET: &str = "secret";
+
 const SECRET: &str = "segredo-de-teste-com-mais-de-32-bytes";
 
 pub fn app(db: PgPool) -> Router {
-    routes::router(AppState::new(db, SECRET, true, vec![HeaderValue::from_static(WEB_ORIGIN)]))
+    routes::router(AppState::new(
+        db,
+        SECRET,
+        true,
+        vec![HeaderValue::from_static(WEB_ORIGIN)],
+        LiveKit::new(LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET),
+    ))
 }
 
 pub struct Reply {

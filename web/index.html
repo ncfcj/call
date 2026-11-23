@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Call</title>
     <link data-trunk rel="css" href="style.css" />
+    <!-- SDK do LiveKit (global LivekitClient), usado pela ponte do crate voice. Veja vendor/README.md. -->
+    <script data-trunk src="vendor/livekit-client-2.25.0.umd.js"></script>
+    <!-- Ponte JS do crate voice (global CallVoice). Fica aqui, e não como snippet do
+         wasm-bindgen, para o nome do arquivo levar o hash do conteúdo. -->
+    <script data-trunk src="../crates/voice/js/voice.js"></script>
     <link data-trunk rel="rust" data-wasm-opt="z" data-cargo-profile="wasm-release" />
   </head>
   <body></body>

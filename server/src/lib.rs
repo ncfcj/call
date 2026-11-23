@@ -7,4 +7,6 @@ pub mod config;
 pub mod error;
 pub mod routes;
 pub mod state;
+pub mod voice;
+pub mod voice_state;
 pub mod ws;
