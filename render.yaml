@@ -6,7 +6,7 @@ services:
     name: call
     runtime: docker
     plan: free
-    region: virginia # a mais perto do Brasil; crie o Neon em AWS us-east-1
+    region: ohio # a mesma do Neon (AWS us-east-2); não dá para mudar depois de criar
     dockerfilePath: ./deploy/Dockerfile
     # Deploy só manual, para não gastar os 500 minutos de build do mês.
     autoDeployTrigger: "off"
