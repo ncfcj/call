@@ -4,12 +4,14 @@ use proto::{
     AuthResponse, LoginRequest, RegisterRequest, User, UserId,
     auth::{normalize_username, validate_display_name, validate_password, validate_username},
 };
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::users::find_user;
 use crate::{
     auth::{cookie, jwt::ACCESS_TTL_SECS, password, refresh},
     error::{AppError, AppResult},
+    limit::ClientIp,
     state::AppState,
 };
 
@@ -28,9 +30,18 @@ fn response(state: &AppState, user: User) -> AppResult<AuthResponse> {
 /// `POST /auth/register`
 pub async fn register(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     jar: CookieJar,
     Json(req): Json<RegisterRequest>,
 ) -> AppResult<(StatusCode, CookieJar, Json<AuthResponse>)> {
+    state.limits.register.check(ip)?;
+    if let Some(code) = &state.signup_code {
+        let sent = req.invite_code.as_deref().unwrap_or_default().trim();
+        // Compara os hashes: o tempo não revela quantos caracteres batem.
+        if Sha256::digest(sent) != Sha256::digest(code) {
+            return Err(AppError::Forbidden("código de convite inválido"));
+        }
+    }
     let username = normalize_username(&req.username);
     let display_name = req.display_name.trim().to_owned();
     validate_username(&username).map_err(AppError::Validation)?;
@@ -71,9 +82,11 @@ struct LoginRow {
 /// `POST /auth/login`
 pub async fn login(
     State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
     jar: CookieJar,
     Json(req): Json<LoginRequest>,
 ) -> AppResult<AuthReply> {
+    state.limits.login.check(ip)?;
     let row: Option<LoginRow> = sqlx::query_as(
         "SELECT id, username, display_name, password_hash FROM users WHERE username = $1",
     )
@@ -92,7 +105,12 @@ pub async fn login(
 }
 
 /// `POST /auth/refresh`: troca o cookie de refresh por um novo e emite um access token.
-pub async fn refresh(State(state): State<AppState>, jar: CookieJar) -> AppResult<AuthReply> {
+pub async fn refresh(
+    State(state): State<AppState>,
+    ClientIp(ip): ClientIp,
+    jar: CookieJar,
+) -> AppResult<AuthReply> {
+    state.limits.refresh.check(ip)?;
     let token = cookie::read_refresh(&jar).ok_or(AppError::Unauthorized)?;
     // Em caso de 401 o cookie não é apagado: pode ser a corrida entre duas abas, e a outra
     // aba já gravou um cookie novo, que não pode ser apagado.

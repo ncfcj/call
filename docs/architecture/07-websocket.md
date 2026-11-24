@@ -33,6 +33,7 @@ sequenceDiagram
 - **Ticket:** `GET /ws` sem ticket válido responde 401, e um ticket já usado também.
 - **Origin:** um `Origin` fora de `WEB_ORIGIN` responde 403, porque CORS não protege
   WebSocket. Um client fora do navegador não manda `Origin` e passa só pelo ticket.
+- **Tamanho:** uma mensagem acima de 64 KB derruba a conexão.
 - **Heartbeat:** sem nenhuma mensagem do client por 60 s (duas vezes o intervalo), o servidor
   fecha a conexão.
 
@@ -48,7 +49,7 @@ Formato no fio: `{"t": "<TIPO>", "d": {...}}`.
 
 | Do servidor | Dados | Quando |
 | --- | --- | --- |
-| `HELLO` | `heartbeat_interval_ms`, `user_id` | Logo após o upgrade |
+| `HELLO` | `heartbeat_interval_ms`, `user_id`, `message_ttl_days` | Logo após o upgrade |
 | `HEARTBEAT_ACK` | | Resposta ao `HEARTBEAT` |
 | `SUBSCRIBED` | `guild_id`, `online` | Resposta ao `SUBSCRIBE`, com quem está online no servidor |
 | `MESSAGE_CREATE` | a `Message` inteira | Depois de `POST /channels/{id}/messages` gravar a mensagem |

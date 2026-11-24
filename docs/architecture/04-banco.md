@@ -79,4 +79,6 @@ erDiagram
   usuário mantém as mensagens dele, com `author_id` nulo.
 - Apagar o usuário dono de um servidor falha, porque `guilds.owner_id` não tem `ON DELETE`.
   Defina o comportamento na Fase 1 (transferir o servidor ou bloquear a exclusão).
+- **Retenção:** o servidor apaga as mensagens com mais de `MESSAGE_TTL_DAYS` dias (padrão 30) na
+  subida e a cada 6 h, em lotes de 1000, pelo tempo contido no próprio id (`retention.rs`).
 - O fluxo dos refresh tokens está em [05-auth.md](05-auth.md).

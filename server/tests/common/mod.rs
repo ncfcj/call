@@ -2,9 +2,12 @@
 
 #![allow(dead_code)] // cada arquivo de teste usa uma parte
 
+use std::net::SocketAddr;
+
 use axum::{
     Router,
     body::Body,
+    extract::connect_info::MockConnectInfo,
     http::{HeaderValue, Request, StatusCode, header},
 };
 use call_server::{routes, state::AppState, voice::LiveKit};
@@ -24,13 +27,22 @@ pub const LIVEKIT_SECRET: &str = "secret";
 const SECRET: &str = "segredo-de-teste-com-mais-de-32-bytes";
 
 pub fn app(db: PgPool) -> Router {
-    routes::router(AppState::new(
+    router(state(db))
+}
+
+pub fn router(state: AppState) -> Router {
+    routes::router(state).layer(MockConnectInfo(SocketAddr::from(([127, 0, 0, 1], 9))))
+}
+
+pub fn state(db: PgPool) -> AppState {
+    AppState::new(
         db,
         SECRET,
         true,
         vec![HeaderValue::from_static(WEB_ORIGIN)],
         LiveKit::new(LIVEKIT_URL, LIVEKIT_KEY, LIVEKIT_SECRET),
-    ))
+        30,
+    )
 }
 
 pub struct Reply {

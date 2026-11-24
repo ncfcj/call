@@ -294,6 +294,15 @@ fn MessagePane() -> impl IntoView {
             .is_some_and(|id| store.logs.with(|l| l.get(&id).is_some_and(|log| log.has_older)))
     };
 
+    // Só no começo do histórico: antes disso, ainda há o que carregar.
+    let ttl_notice = move || {
+        let id = store.selected_channel.get()?;
+        let at_start = store.logs.with(|l| l.get(&id).is_some_and(|log| !log.has_older));
+        let days = store.message_ttl_days.get().filter(|_| at_start)?;
+        let unit = if days == 1 { "dia" } else { "dias" };
+        Some(format!("Mensagens com mais de {days} {unit} são apagadas."))
+    };
+
     // Mensagem nova: desce até o fim, se o usuário já estava lá. Ao trocar de canal, desce sempre.
     Effect::new(move |prev: Option<Option<ChannelId>>| {
         let current = store.selected_channel.get();
@@ -361,6 +370,7 @@ fn MessagePane() -> impl IntoView {
                         "Carregar mensagens antigas"
                     </button>
                 </Show>
+                {move || ttl_notice().map(|text| view! { <p class="ttl">{text}</p> })}
                 <For
                     each=move || rows.get()
                     key=|(m, head): &(Message, bool)| (m.id, *head, m.content.clone())

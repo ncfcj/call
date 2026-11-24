@@ -22,6 +22,7 @@ pub async fn token(
     AuthUser(user): AuthUser,
     Path(channel): Path<ChannelId>,
 ) -> AppResult<Json<VoiceTokenResponse>> {
+    state.limits.voice_token.check(user)?;
     let access = channel_member(&state.db, channel, user).await?;
     if access.channel.kind != ChannelKind::Voice {
         return Err(AppError::Validation("só canais de voz têm chamada"));

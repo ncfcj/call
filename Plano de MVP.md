@@ -159,7 +159,7 @@ Pronto quando: dois usuários em navegadores diferentes trocam mensagens em temp
 
 Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conversam sem eco perceptível. Mute e deaf aparecem na barra lateral dos outros em menos de 1 s. Fechar a aba remove o usuário do canal.
 
-**Situação: implementada, em validação.** Branch `fase-2`, PR #4. O critério "redes diferentes (4G e Wi-Fi de outra casa)" depende do LiveKit acessível de fora da rede local, e fica para o deploy da Fase 3 (ou um teste com o LiveKit Cloud). Mute e deaf chegam à barra lateral dos outros em poucos milissegundos, e fechar a aba tira a pessoa do canal na hora.
+**Situação: concluída.** Entrou na `main` pelo PR #4. O critério "redes diferentes (4G e Wi-Fi de outra casa)" depende do LiveKit acessível de fora da rede local, e fica para o deploy da Fase 3 (ou um teste com o LiveKit Cloud). Mute e deaf chegam à barra lateral dos outros em poucos milissegundos, e fechar a aba tira a pessoa do canal na hora.
 
 | Etapa | Situação | Teste funcional |
 | --- | --- | --- |
@@ -172,14 +172,37 @@ Pronto quando: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa) conve
 
 ### Fase 3: polimento e deploy (cerca de 1 semana)
 
-- [ ] VM Oracle com Caddy (TLS automático) na frente do binário Rust, serviço `systemd` e Neon em produção
-- [ ] Front no Cloudflare Pages, com CORS restrito ao domínio dele
-- [ ] Rate limit em login e envio de mensagens. Tamanho máximo de mensagem
-- [ ] Monitoramento e observabilidade: logs, métricas, alertas e um painel de uso das cotas (minutos do LiveKit, armazenamento do Neon). Detalhes abaixo
-- [ ] Retenção de mensagens de texto (TTL), para guardar o mínimo necessário. Detalhes abaixo
-- [ ] Build Tauri para Windows (instalador MSI ou NSIS) com o mesmo client Leptos. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
-
 Pronto quando: URL pública, cinco pessoas numa call de 30 min sem quedas, e o consumo do mês dentro das cotas gratuitas.
+
+**Decisões antes de começar** (a etapa 3c depende delas):
+
+- [ ] **Domínio.** Um domínio próprio, com o front em `app.<domínio>` e a API em `api.<domínio>`. Os dois ficam no mesmo site, então o cookie de refresh continua com `SameSite=Lax` e a pendência do cookie se resolve sem código. Sem domínio, o front em `*.pages.dev` e a API em outro host exigem `SameSite=None` e um CSRF mais cuidadoso
+- [ ] **Voz em produção.** LiveKit Cloud Build (zero manutenção, TURN incluído, teto de 5.000 min/mês) ou LiveKit self-hosted na VM Oracle (sem teto, mas com portas UDP e TURN para configurar). Sugestão: Cloud agora, self-host quando a cota apertar
+- [ ] **Região da Oracle.** Escolhida no cadastro e não muda depois; ver os riscos no fim do documento
+
+Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o deploy, por fim o desktop e o teste de aceite. Cada uma é um commit com um teste funcional, como nas fases anteriores.
+
+- [x] **3a. API pronta para a internet.** Rate limit por IP em `/auth/login`, `/auth/register` e `/auth/refresh`, e por usuário em `POST /ws/ticket`, envio de mensagens e token de voz (respondendo `429` com `Retry-After`). Limite de 64 KB no corpo das requisições e nas mensagens do WebSocket. Erros de extração (JSON malformado, UUID inválido) no formato `{code, message}`, fechando a pendência. Conferir a validação do `Origin` no WebSocket com a lista de produção
+- [x] **3b. Retenção de mensagens (TTL).** Expurgo periódico e aviso no client. Detalhes abaixo
+> **Hospedagem (2026-11-23):** o cadastro na Oracle não deu certo e, por ora, não pode haver custo nem domínio próprio. O Call vai para o Render grátis, com o Neon como banco: um serviço só entrega o client e a API na mesma origem, compilado pelo `deploy/Dockerfile` e descrito no `render.yaml`. Isso junta a 3c e a 3d e deixa de usar Oracle, Caddy e Cloudflare Pages; os cabeçalhos de segurança da 3d passam para o servidor. O serviço dorme após 15 min sem uso e leva cerca de 1 min para acordar. Os arquivos para VM (`deploy/instalar.sh`, `scripts/deploy.ps1`) ficam para quando houver uma. O texto abaixo é o plano original.
+
+- [ ] **3c. API em produção.** VM Oracle (Arm) com o binário `aarch64` compilado no CI, serviço `systemd` com usuário próprio, Caddy na frente com TLS automático (inclusive para o WebSocket), Neon como banco e migrations aplicadas no deploy. Segredos (`JWT_SECRET`, chaves do LiveKit, URL do banco) só no arquivo de ambiente da VM. SSH só por chave, firewall com 22, 80 e 443. Um `scripts/deploy.ps1` para repetir o deploy
+- [ ] **3d. Front no Cloudflare Pages.** Build do Trunk com `CALL_API_URL` de produção, `WEB_ORIGIN` da API restrito ao domínio do front e cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`) no `_headers` do Pages
+- [ ] **3e. Voz em produção.** Projeto no LiveKit Cloud (ou o self-host), webhook apontando para `https://api.<domínio>/livekit/webhook` e as chaves no ambiente da VM. Fecha o critério pendente da Fase 2: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa)
+- [ ] **3f. Monitoramento e observabilidade.** Logs, métricas, alertas e o painel de cotas (minutos do LiveKit, armazenamento do Neon). Detalhes abaixo
+- [ ] **3g. Desktop Windows com Tauri.** Instalador MSI ou NSIS com o mesmo client Leptos, apontando para a API de produção. Conferir microfone e voz no WebView2. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
+- [ ] **3h. Teste de aceite.** Cinco pessoas numa call de 30 min na URL pública, com o painel aberto: sem quedas, e o consumo projetado do mês dentro das cotas
+
+| Etapa | Depende de | Teste funcional |
+| --- | --- | --- |
+| 3a. API pronta para a internet | — | `scripts/teste-rate-limit.ps1`: logins seguidos recebem `429`; corpo grande recebe `413`; JSON inválido recebe `{code, message}` |
+| 3b. Retenção (TTL) | — | Teste de integração com prazo curto: a mensagem vencida some do histórico |
+| 3c. API em produção | Domínio, região | `https://api.<domínio>/health` responde; reiniciar a VM traz o serviço de volta sozinho |
+| 3d. Front no Pages | 3c | Cadastro, login e chat entre dois navegadores na URL pública; recarregar a página mantém a sessão |
+| 3e. Voz em produção | 3c, 3d | Chamada entre 4G e Wi-Fi de outra rede; o estado de voz aparece para os outros |
+| 3f. Monitoramento | 3c | Parar o serviço de propósito gera um alerta; um erro 500 aparece no Sentry |
+| 3g. Desktop Windows | 3d, 3e | Instalar o MSI numa máquina limpa, entrar e falar numa chamada |
+| 3h. Teste de aceite | Todas | Cinco pessoas, 30 min, sem quedas |
 
 #### Monitoramento e observabilidade
 
@@ -208,17 +231,17 @@ Pronto quando: derrubar o servidor ou o Postgres de propósito gera um alerta em
 
 #### Retenção de mensagens (TTL)
 
-Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento para de crescer com o tempo de uso. Hoje toda mensagem fica para sempre. Uma mensagem curta ocupa de 150 a 300 bytes com o índice, e o Neon Free tem 1 GB.
+Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento para de crescer com o tempo de uso. Uma mensagem curta ocupa de 150 a 300 bytes com o índice, e o Neon Free tem 1 GB.
 
 Decisões a tomar:
 
-- [ ] **Prazo padrão.** Sugestão: 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
-- [ ] **Quem escolhe.** Um prazo global no servidor (`MESSAGE_TTL_DAYS`) ou um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
+- [x] **Prazo padrão.** 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
+- [x] **Quem escolhe.** Um prazo global (`MESSAGE_TTL_DAYS`). A outra opção era um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
 - [ ] **Limite por quantidade.** Opcional: manter no máximo N mensagens por canal, além do prazo
 
 Implementação prevista:
 
-- **Expurgo periódico:** uma tarefa no próprio `call-server` (um `tokio::time::interval`, por exemplo a cada hora) apaga em lotes as mensagens vencidas. Como o id é UUIDv7, o tempo está no próprio id: dá para apagar com `WHERE id < <UUIDv7 do instante de corte>` usando o índice que já existe.
+- **Expurgo periódico:** uma tarefa no próprio `call-server` (um `tokio::time::interval`, na subida e a cada 6 h, para não acordar o Neon à toa) apaga em lotes as mensagens vencidas. Como o id é UUIDv7, o tempo está no próprio id: dá para apagar com `WHERE id < <UUIDv7 do instante de corte>` usando o índice que já existe.
 - **Espaço de volta no disco:** no Postgres, um `DELETE` não devolve espaço na hora; o `VACUUM` só reaproveita o espaço. Se o volume crescer, particionar `messages` por mês e apagar a partição inteira (`DROP TABLE`), que devolve o espaço na hora e não gera trabalho de `VACUUM`.
 - **Client:** o histórico termina no limite do prazo. A tela avisa algo como "mensagens com mais de 30 dias são apagadas", e o `has_older` do `MessageLog` fica falso ao chegar lá.
 - **Reconexão:** um client que ficar offline por mais tempo que o prazo simplesmente não recupera o que venceu. O `?after=<id>` continua funcionando.
@@ -322,11 +345,11 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 ### Pendências conhecidas
 
 - **Cookie no deploy (Fase 3):** o refresh usa `SameSite=Lax` e funciona com o client e a API no mesmo site. Com o Cloudflare Pages e a VM em domínios diferentes, vai precisar de `SameSite=None` ou de um subdomínio em comum.
-- **Erros de extração em texto puro:** JSON malformado, UUID inválido na URL ou query inválida respondem texto do axum, e não `{code, message}`.
+- **Eventos do WebSocket sem limite de frequência:** `SUBSCRIBE`, `TYPING_START` e `VOICE_STATE_UPDATE` consultam o banco a cada evento, e uma conexão pode mandá-los sem parar.
+- **Limite do login só por IP:** um ataque a uma mesma conta, vindo de muitos IPs, não é barrado. Travar por conta deixaria qualquer um bloquear o login de outra pessoa.
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
 - **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
-- **Retenção das mensagens:** hoje toda mensagem fica para sempre. O TTL está planejado na Fase 3.
 - **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
 - **`chrono` sem manutenção (RUSTSEC-2026-0543):** vem do `sqlx` e da `livekit-api`; a exceção está no `deny.toml`. Migrar para `time` ou `jiff` quando as dependências permitirem.
 

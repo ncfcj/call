@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
-use axum::http::HeaderValue;
+use axum::http::{HeaderName, HeaderValue};
 use sqlx::PgPool;
 
 use crate::{
     auth::jwt::JwtKeys,
+    limit::Limits,
     voice::LiveKit,
     voice_state::VoiceStates,
     ws::{hub::Hub, ticket::Tickets},
@@ -22,6 +23,13 @@ pub struct AppState {
     pub hub: Arc<Hub>,
     pub livekit: Arc<LiveKit>,
     pub voice_states: Arc<VoiceStates>,
+    pub limits: Arc<Limits>,
+    /// Header com o IP do client, escrito por um proxy na frente (ver `limit.rs`).
+    pub client_ip_header: Option<HeaderName>,
+    /// Código exigido para criar conta. Sem ele, o cadastro é aberto.
+    pub signup_code: Option<String>,
+    /// Prazo das mensagens, para o client avisar até onde vai o histórico.
+    pub message_ttl_days: u32,
 }
 
 impl AppState {
@@ -31,6 +39,7 @@ impl AppState {
         cookie_secure: bool,
         web_origins: Vec<HeaderValue>,
         livekit: LiveKit,
+        message_ttl_days: u32,
     ) -> Self {
         Self {
             db,
@@ -41,6 +50,10 @@ impl AppState {
             hub: Arc::new(Hub::new()),
             livekit: Arc::new(livekit),
             voice_states: Arc::new(VoiceStates::new()),
+            limits: Arc::default(),
+            client_ip_header: None,
+            signup_code: None,
+            message_ttl_days,
         }
     }
 }

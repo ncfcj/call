@@ -15,6 +15,7 @@ pub fn AuthPage() -> impl IntoView {
     let username = RwSignal::new(String::new());
     let display_name = RwSignal::new(String::new());
     let password = RwSignal::new(String::new());
+    let invite_code = RwSignal::new(String::new());
     let error = RwSignal::new(None::<String>);
     let busy = RwSignal::new(false);
 
@@ -24,6 +25,7 @@ pub fn AuthPage() -> impl IntoView {
         let user = normalize_username(&username.get_untracked());
         let pass = password.get_untracked();
         let name = display_name.get_untracked().trim().to_owned();
+        let code = invite_code.get_untracked().trim().to_owned();
         let register = registering.get_untracked();
 
         // As mesmas regras do servidor, para errar antes de ir à rede.
@@ -48,6 +50,7 @@ pub fn AuthPage() -> impl IntoView {
                     username: user,
                     display_name: name,
                     password: pass,
+                    invite_code: (!code.is_empty()).then_some(code),
                 })
                 .await
             } else {
@@ -102,6 +105,12 @@ pub fn AuthPage() -> impl IntoView {
                         required
                     />
                 </label>
+                <Show when=move || registering.get()>
+                    <label>
+                        "Código de convite (se o Call pedir)"
+                        <input bind:value=invite_code autocomplete="off" />
+                    </label>
+                </Show>
                 <Show when=move || error.get().is_some()>
                     <p class="form-error">{move || error.get()}</p>
                 </Show>

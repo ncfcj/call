@@ -1,11 +1,11 @@
-use std::time::Duration;
+use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Context;
 use sqlx::postgres::PgPoolOptions;
 use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-use call_server::{config::Config, routes, state::AppState};
+use call_server::{config::Config, retention, routes, state::AppState};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,14 +29,23 @@ async fn main() -> anyhow::Result<()> {
 
     sqlx::migrate!("../migrations").run(&db).await.context("falha ao aplicar migrations")?;
 
-    let state = AppState::new(
+    tokio::spawn(retention::run(db.clone(), config.message_ttl_days));
+
+    let mut state = AppState::new(
         db,
         &config.jwt_secret,
         config.cookie_secure,
         config.web_origins.clone(),
         config.livekit.clone(),
+        config.message_ttl_days,
     );
-    let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
+    state.client_ip_header = config.client_ip_header.clone();
+    state.signup_code = config.signup_code.clone();
+    let mut app = routes::router(state);
+    if let Some(dir) = &config.web_dir {
+        app = routes::serve_web(app, dir);
+    }
+    let app = app.layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
     // Um listener por endereço, todos com o mesmo app (o mesmo estado e o mesmo hub).
     let mut servers = tokio::task::JoinSet::new();
@@ -46,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
             .with_context(|| format!("não foi possível escutar em {addr}"))?;
         tracing::info!("call-server ouvindo em http://{}", listener.local_addr()?);
         servers.spawn(
-            axum::serve(listener, app.clone())
+            axum::serve(listener, app.clone().into_make_service_with_connect_info::<SocketAddr>())
                 .with_graceful_shutdown(shutdown_signal())
                 .into_future(),
         );
@@ -58,6 +67,19 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+    let ctrl_c = tokio::signal::ctrl_c();
+    // O Docker e o Render encerram com SIGTERM, que o processo 1 de um contêiner ignora por padrão.
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut term) => {
+                tokio::select! { _ = ctrl_c => {}, _ = term.recv() => {} }
+            }
+            Err(_) => drop(ctrl_c.await),
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = ctrl_c.await;
     tracing::info!("encerrando");
 }

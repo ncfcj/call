@@ -7,7 +7,7 @@ mod common;
 
 use axum::http::StatusCode;
 use common::{app, call, register};
-use serde_json::json;
+use serde_json::{Value, json};
 use sqlx::PgPool;
 
 #[sqlx::test(migrations = "../migrations")]
@@ -159,4 +159,31 @@ async fn protected_route_requires_a_valid_token(db: PgPool) {
         assert_eq!(r.status, StatusCode::UNAUTHORIZED);
         assert_eq!(r.body["code"], "unauthorized");
     }
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn signup_needs_the_invite_code_when_there_is_one(db: PgPool) {
+    let mut state = common::state(db);
+    state.signup_code = Some("codigo-com-16-ab".to_owned());
+    let app = common::router(state);
+    let signup = async |code: Value| {
+        let body = json!({
+            "username": "ana", "display_name": "Ana", "password": "senha-forte-1",
+            "invite_code": code,
+        });
+        call(&app, "POST", "/auth/register", Some(body), None, None).await
+    };
+
+    assert_eq!(register(&app, "ana").await.status, StatusCode::FORBIDDEN, "sem o campo");
+    for wrong in [json!(null), json!(""), json!("codigo-com-16-aB")] {
+        let reply = signup(wrong).await;
+        assert_eq!(reply.status, StatusCode::FORBIDDEN);
+        assert_eq!(reply.body["message"], "código de convite inválido");
+    }
+    assert_eq!(signup(json!(" codigo-com-16-ab ")).await.status, StatusCode::CREATED);
+
+    // Quem já tem conta entra sem código.
+    let body = json!({"username": "ana", "password": "senha-forte-1"});
+    let login = call(&app, "POST", "/auth/login", Some(body), None, None).await;
+    assert_eq!(login.status, StatusCode::OK);
 }

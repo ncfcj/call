@@ -40,6 +40,9 @@ pub enum ServerEvent {
     Hello {
         heartbeat_interval_ms: u64,
         user_id: UserId,
+        /// Dias até o servidor apagar uma mensagem. `None` num servidor antigo, sem retenção.
+        #[serde(default)]
+        message_ttl_days: Option<u32>,
     },
     HeartbeatAck,
     /// Resposta a `SUBSCRIBE`: a partir daqui chegam os eventos do servidor. `online` lista
@@ -106,13 +109,21 @@ mod tests {
     #[test]
     fn hello_wire_format() {
         let user_id = UserId(Uuid::nil());
-        let json =
-            serde_json::to_string(&ServerEvent::Hello { heartbeat_interval_ms: 30_000, user_id })
-                .unwrap();
+        let json = serde_json::to_string(&ServerEvent::Hello {
+            heartbeat_interval_ms: 30_000,
+            user_id,
+            message_ttl_days: Some(30),
+        })
+        .unwrap();
         assert_eq!(
             json,
-            r#"{"t":"HELLO","d":{"heartbeat_interval_ms":30000,"user_id":"00000000-0000-0000-0000-000000000000"}}"#
+            r#"{"t":"HELLO","d":{"heartbeat_interval_ms":30000,"user_id":"00000000-0000-0000-0000-000000000000","message_ttl_days":30}}"#
         );
+        let old = json.replace(r#","message_ttl_days":30"#, "");
+        assert!(matches!(
+            serde_json::from_str::<ServerEvent>(&old).unwrap(),
+            ServerEvent::Hello { message_ttl_days: None, .. }
+        ));
     }
 
     #[test]

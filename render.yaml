@@ -1,0 +1,34 @@
+# Blueprint do Render: um serviço grátis com a API e o client na mesma origem (no onrender.com, dois
+# serviços seriam sites diferentes e o cookie de login não passaria).
+# Sem healthCheckPath de propósito: o /health consulta o banco e manteria o Neon acordado.
+services:
+  - type: web
+    name: call
+    runtime: docker
+    plan: free
+    region: ohio # a mesma do Neon (AWS us-east-2); não dá para mudar depois de criar
+    dockerfilePath: ./deploy/Dockerfile
+    # Deploy só manual, para não gastar os 500 minutos de build do mês.
+    autoDeployTrigger: "off"
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      # Código para criar conta; veja o valor em Environment, no painel.
+      - key: SIGNUP_CODE
+        generateValue: true
+      # O Cloudflare do Render sobrescreve este header com o IP de quem chamou.
+      - key: CLIENT_IP_HEADER
+        value: cf-connecting-ip
+      - key: MESSAGE_TTL_DAYS
+        value: "30"
+      - key: RUST_LOG
+        value: call_server=info,tower_http=info
+      # Pedidos no painel ao criar o serviço; nunca no git.
+      - key: DATABASE_URL
+        sync: false
+      - key: LIVEKIT_URL
+        sync: false
+      - key: LIVEKIT_API_KEY
+        sync: false
+      - key: LIVEKIT_API_SECRET
+        sync: false

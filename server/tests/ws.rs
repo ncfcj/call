@@ -92,6 +92,7 @@ impl Client {
         assert_eq!(hello["t"], "HELLO");
         assert_eq!(hello["d"]["heartbeat_interval_ms"], 30_000);
         assert_eq!(hello["d"]["user_id"], u.id.as_str());
+        assert_eq!(hello["d"]["message_ttl_days"], 30);
         client
     }
 
@@ -268,6 +269,16 @@ async fn presence_goes_online_and_offline(db: PgPool) {
     let event = ws_ana.next_of("PRESENCE_UPDATE").await;
     assert_eq!(event["d"]["user_id"], bia.id.as_str());
     assert_eq!(event["d"]["status"], "offline");
+}
+
+#[sqlx::test(migrations = "../migrations")]
+async fn oversized_message_closes_the_connection(db: PgPool) {
+    let server = serve(db).await;
+    let ana = user(&server, "ana").await;
+    let mut ws = Client::connect(&server, &ana).await;
+    let _ = ws.socket.send(Message::text("x".repeat(64 * 1024 + 1))).await;
+    let next = tokio::time::timeout(WAIT, ws.socket.next()).await.expect("a conexão segue aberta");
+    assert!(!matches!(next, Some(Ok(Message::Text(_)))), "não responde: {next:?}");
 }
 
 #[sqlx::test(migrations = "../migrations")]

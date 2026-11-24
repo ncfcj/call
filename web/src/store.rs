@@ -35,6 +35,8 @@ pub struct Store {
     pub members: RwSignal<HashMap<GuildId, Vec<Member>>>,
     pub online: RwSignal<HashMap<GuildId, HashSet<UserId>>>,
     pub logs: RwSignal<HashMap<ChannelId, MessageLog>>,
+    /// Dias até o servidor apagar uma mensagem (vem no `HELLO`).
+    pub message_ttl_days: RwSignal<Option<u32>>,
     pub unread: RwSignal<HashSet<ChannelId>>,
     pub typing: RwSignal<Typing>,
     /// Relógio de 1 s, para os avisos de digitação vencerem na tela.
@@ -73,6 +75,7 @@ impl Store {
             members: RwSignal::new(HashMap::new()),
             online: RwSignal::new(HashMap::new()),
             logs: RwSignal::new(HashMap::new()),
+            message_ttl_days: RwSignal::new(None),
             unread: RwSignal::new(HashSet::new()),
             typing: RwSignal::new(Typing::default()),
             now: RwSignal::new(now_ms()),
@@ -487,7 +490,10 @@ impl Store {
 
     pub fn apply(self, event: ServerEvent) {
         match event {
-            ServerEvent::Hello { .. } | ServerEvent::HeartbeatAck => {}
+            ServerEvent::Hello { message_ttl_days, .. } => {
+                self.message_ttl_days.set(message_ttl_days);
+            }
+            ServerEvent::HeartbeatAck => {}
             ServerEvent::Subscribed { guild_id, online, voice } => {
                 self.online.update(|o| {
                     o.insert(guild_id, online.into_iter().collect());
