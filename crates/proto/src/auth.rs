@@ -21,6 +21,9 @@ pub struct RegisterRequest {
     pub username: String,
     pub display_name: String,
     pub password: String,
+    /// Código de convite do Call (não o de um servidor), se a instalação exigir.
+    #[serde(default)]
+    pub invite_code: Option<String>,
 }
 
 /// `POST /auth/login`

@@ -4,6 +4,7 @@ use proto::{
     AuthResponse, LoginRequest, RegisterRequest, User, UserId,
     auth::{normalize_username, validate_display_name, validate_password, validate_username},
 };
+use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use super::users::find_user;
@@ -34,6 +35,13 @@ pub async fn register(
     Json(req): Json<RegisterRequest>,
 ) -> AppResult<(StatusCode, CookieJar, Json<AuthResponse>)> {
     state.limits.register.check(ip)?;
+    if let Some(code) = &state.signup_code {
+        let sent = req.invite_code.as_deref().unwrap_or_default().trim();
+        // Compara os hashes: o tempo não revela quantos caracteres batem.
+        if Sha256::digest(sent) != Sha256::digest(code) {
+            return Err(AppError::Forbidden("código de convite inválido"));
+        }
+    }
     let username = normalize_username(&req.username);
     let display_name = req.display_name.trim().to_owned();
     validate_username(&username).map_err(AppError::Validation)?;

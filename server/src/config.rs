@@ -24,6 +24,8 @@ pub struct Config {
     pub web_dir: Option<String>,
     /// Header em que o proxy da hospedagem escreve o IP do client.
     pub client_ip_header: Option<HeaderName>,
+    /// Código exigido para criar conta. Sem ele, o cadastro é aberto.
+    pub signup_code: Option<String>,
 }
 
 impl Config {
@@ -97,6 +99,16 @@ impl Config {
             })
             .transpose()?;
 
+        let signup_code = var("SIGNUP_CODE");
+        match &signup_code {
+            Some(code) if code.trim().len() < 16 => {
+                bail!("SIGNUP_CODE precisa ter pelo menos 16 caracteres")
+            }
+            // Na internet, esquecer a variável não pode abrir o cadastro.
+            None if var("RENDER_EXTERNAL_URL").is_some() => bail!("defina SIGNUP_CODE"),
+            _ => {}
+        }
+
         Ok(Self {
             database_url,
             bind_addrs,
@@ -107,6 +119,7 @@ impl Config {
             message_ttl_days,
             web_dir: var("WEB_DIR"),
             client_ip_header,
+            signup_code: signup_code.map(|code| code.trim().to_owned()),
         })
     }
 
@@ -182,6 +195,9 @@ mod tests {
             ("WEB_ORIGIN", "http://a\nb", "origem inválida"),
             ("WEB_ORIGIN", ",", "pelo menos uma origem"),
             ("CLIENT_IP_HEADER", "com espaço", "CLIENT_IP_HEADER inválido"),
+            ("SIGNUP_CODE", "", "16 caracteres"),
+            ("SIGNUP_CODE", "quinze-letras-1", "16 caracteres"),
+            ("RENDER_EXTERNAL_URL", "https://x.onrender.com", "defina SIGNUP_CODE"),
             ("JWT_SECRET", "curto", "32 caracteres"),
             ("COOKIE_SECURE", "sim", "true ou false"),
             ("MESSAGE_TTL_DAYS", "0", "entre 1 e 36500"),
@@ -230,7 +246,8 @@ mod tests {
     fn render_serves_the_client_on_its_own_public_url() {
         let mut v = base();
         let c = load(&v).unwrap();
-        assert_eq!((c.web_dir, c.client_ip_header), (None, None));
+        assert_eq!((c.web_dir, c.client_ip_header, c.signup_code), (None, None, None));
+        v.insert("SIGNUP_CODE", " codigo-com-16-ab\n".into());
         v.insert("RENDER_EXTERNAL_URL", "https://x.onrender.com".into());
         v.insert("WEB_DIR", "/web".into());
         v.insert("CLIENT_IP_HEADER", "CF-Connecting-IP".into());
@@ -238,6 +255,7 @@ mod tests {
         assert_eq!(c.web_origins, ["https://x.onrender.com"]);
         assert_eq!(c.web_dir.as_deref(), Some("/web"));
         assert_eq!(c.client_ip_header.unwrap(), "cf-connecting-ip");
+        assert_eq!(c.signup_code.as_deref(), Some("codigo-com-16-ab"));
         v.insert("WEB_ORIGIN", "https://a.dev".into());
         assert_eq!(load(&v).unwrap().web_origins, ["https://a.dev"], "WEB_ORIGIN ganha");
     }

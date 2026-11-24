@@ -26,6 +26,8 @@ pub struct AppState {
     pub limits: Arc<Limits>,
     /// Header com o IP do client, escrito por um proxy na frente (ver `limit.rs`).
     pub client_ip_header: Option<HeaderName>,
+    /// Código exigido para criar conta. Sem ele, o cadastro é aberto.
+    pub signup_code: Option<String>,
     /// Prazo das mensagens, para o client avisar até onde vai o histórico.
     pub message_ttl_days: u32,
 }
@@ -50,6 +52,7 @@ impl AppState {
             voice_states: Arc::new(VoiceStates::new()),
             limits: Arc::default(),
             client_ip_header: None,
+            signup_code: None,
             message_ttl_days,
         }
     }

@@ -40,6 +40,7 @@ async fn main() -> anyhow::Result<()> {
         config.message_ttl_days,
     );
     state.client_ip_header = config.client_ip_header.clone();
+    state.signup_code = config.signup_code.clone();
     let mut app = routes::router(state);
     if let Some(dir) = &config.web_dir {
         app = routes::serve_web(app, dir);
