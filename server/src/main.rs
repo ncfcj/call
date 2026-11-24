@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
     state.signup_code = config.signup_code.clone();
     let mut app = routes::router(state);
     if let Some(dir) = &config.web_dir {
-        app = routes::serve_web(app, dir);
+        app = routes::serve_web(app, dir, &config.livekit.url)?;
     }
     let app = app.layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
