@@ -1,0 +1,27 @@
+[Unit]
+Description=Call: API e WebSocket
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/opt/call/call-server
+# Lido pelo systemd como root; o processo não enxerga o arquivo.
+EnvironmentFile=/etc/call/call.env
+# O servidor encerra com calma no Ctrl+C (SIGINT).
+KillSignal=SIGINT
+TimeoutStopSec=10
+Restart=always
+RestartSec=2
+
+# Usuário próprio, criado pelo systemd, sem escrita no disco.
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateDevices=yes
+PrivateTmp=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

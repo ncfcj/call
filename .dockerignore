@@ -1,0 +1,9 @@
+# Só entra o que o cargo precisa; nunca o .env nem a pasta .git.
+*
+!Cargo.toml
+!Cargo.lock
+!crates
+!migrations
+!server
+!web/Cargo.toml
+!web/src

@@ -1,0 +1,14 @@
+# __DOMINIO__ é trocado pelo instalar.sh. O Caddy emite e renova os certificados sozinho.
+# Front e API ficam no mesmo site (subdomínios), então o cookie SameSite=Lax funciona.
+__DOMINIO__ {
+	root * /opt/call/web
+	encode gzip
+	# Os arquivos têm hash no nome, menos a página: sem isso o navegador usaria uma versão velha.
+	@pagina path / /index.html
+	header @pagina Cache-Control no-cache
+	file_server
+}
+
+api.__DOMINIO__ {
+	reverse_proxy 127.0.0.1:3000
+}
