@@ -7,11 +7,17 @@ use crate::{store::Store, views};
 
 /// URL da API. Em build: `$env:CALL_API_URL="https://api.exemplo.com"; trunk build --release`.
 ///
+/// Vazia, é a origem da própria página (o servidor entrega o client, como no Render).
 /// Sem ela, usa o mesmo host da página na porta 3000. O host precisa bater: o navegador trata
 /// `localhost` e `127.0.0.1` como sites diferentes e aí não manda o cookie de refresh.
 fn api_url() -> String {
     if let Some(url) = option_env!("CALL_API_URL") {
-        return url.to_owned();
+        if !url.is_empty() {
+            return url.to_owned();
+        }
+        if let Ok(origin) = window().location().origin() {
+            return origin;
+        }
     }
     let location = window().location();
     let protocol = location.protocol().unwrap_or_else(|_| "http:".to_owned());

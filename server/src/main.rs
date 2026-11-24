@@ -31,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::spawn(retention::run(db.clone(), config.message_ttl_days));
 
-    let state = AppState::new(
+    let mut state = AppState::new(
         db,
         &config.jwt_secret,
         config.cookie_secure,
@@ -39,7 +39,12 @@ async fn main() -> anyhow::Result<()> {
         config.livekit.clone(),
         config.message_ttl_days,
     );
-    let app = routes::router(state).layer(config.cors_layer()).layer(TraceLayer::new_for_http());
+    state.client_ip_header = config.client_ip_header.clone();
+    let mut app = routes::router(state);
+    if let Some(dir) = &config.web_dir {
+        app = routes::serve_web(app, dir);
+    }
+    let app = app.layer(config.cors_layer()).layer(TraceLayer::new_for_http());
 
     // Um listener por endereço, todos com o mesmo app (o mesmo estado e o mesmo hub).
     let mut servers = tokio::task::JoinSet::new();
@@ -61,6 +66,19 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn shutdown_signal() {
-    let _ = tokio::signal::ctrl_c().await;
+    let ctrl_c = tokio::signal::ctrl_c();
+    // O Docker e o Render encerram com SIGTERM, que o processo 1 de um contêiner ignora por padrão.
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{SignalKind, signal};
+        match signal(SignalKind::terminate()) {
+            Ok(mut term) => {
+                tokio::select! { _ = ctrl_c => {}, _ = term.recv() => {} }
+            }
+            Err(_) => drop(ctrl_c.await),
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = ctrl_c.await;
     tracing::info!("encerrando");
 }

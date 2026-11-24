@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use anyhow::{Context, bail};
-use axum::http::{HeaderValue, Method, header};
+use axum::http::{HeaderName, HeaderValue, Method, header};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
 /// Configuração lida das variáveis de ambiente (ou do `.env` em desenvolvimento).
@@ -20,6 +20,10 @@ pub struct Config {
     pub livekit: crate::voice::LiveKit,
     /// Dias até uma mensagem ser apagada de vez.
     pub message_ttl_days: u32,
+    /// Pasta do client compilado, para servir na mesma origem da API.
+    pub web_dir: Option<String>,
+    /// Header em que o proxy da hospedagem escreve o IP do client.
+    pub client_ip_header: Option<HeaderName>,
 }
 
 impl Config {
@@ -45,6 +49,8 @@ impl Config {
         }
 
         let web_origins = var("WEB_ORIGIN")
+            // O Render define a URL pública do serviço, que é também a do client.
+            .or_else(|| var("RENDER_EXTERNAL_URL"))
             // O `trunk serve --open` pode abrir a página por qualquer um destes.
             .unwrap_or_else(|| {
                 "http://localhost:8080,http://127.0.0.1:8080,http://[::1]:8080".to_owned()
@@ -85,6 +91,12 @@ impl Config {
             }
         };
 
+        let client_ip_header = var("CLIENT_IP_HEADER")
+            .map(|name| {
+                name.parse().with_context(|| format!("CLIENT_IP_HEADER inválido: {name:?}"))
+            })
+            .transpose()?;
+
         Ok(Self {
             database_url,
             bind_addrs,
@@ -93,6 +105,8 @@ impl Config {
             cookie_secure,
             livekit,
             message_ttl_days,
+            web_dir: var("WEB_DIR"),
+            client_ip_header,
         })
     }
 
@@ -167,6 +181,7 @@ mod tests {
             ("BIND_ADDR", " , ", "pelo menos um endereço"),
             ("WEB_ORIGIN", "http://a\nb", "origem inválida"),
             ("WEB_ORIGIN", ",", "pelo menos uma origem"),
+            ("CLIENT_IP_HEADER", "com espaço", "CLIENT_IP_HEADER inválido"),
             ("JWT_SECRET", "curto", "32 caracteres"),
             ("COOKIE_SECURE", "sim", "true ou false"),
             ("MESSAGE_TTL_DAYS", "0", "entre 1 e 36500"),
@@ -209,6 +224,22 @@ mod tests {
         assert_eq!(load(&v).unwrap().message_ttl_days, 30);
         v.insert("MESSAGE_TTL_DAYS", "1".into());
         assert_eq!(load(&v).unwrap().message_ttl_days, 1);
+    }
+
+    #[test]
+    fn render_serves_the_client_on_its_own_public_url() {
+        let mut v = base();
+        let c = load(&v).unwrap();
+        assert_eq!((c.web_dir, c.client_ip_header), (None, None));
+        v.insert("RENDER_EXTERNAL_URL", "https://x.onrender.com".into());
+        v.insert("WEB_DIR", "/web".into());
+        v.insert("CLIENT_IP_HEADER", "CF-Connecting-IP".into());
+        let c = load(&v).unwrap();
+        assert_eq!(c.web_origins, ["https://x.onrender.com"]);
+        assert_eq!(c.web_dir.as_deref(), Some("/web"));
+        assert_eq!(c.client_ip_header.unwrap(), "cf-connecting-ip");
+        v.insert("WEB_ORIGIN", "https://a.dev".into());
+        assert_eq!(load(&v).unwrap().web_origins, ["https://a.dev"], "WEB_ORIGIN ganha");
     }
 
     #[test]

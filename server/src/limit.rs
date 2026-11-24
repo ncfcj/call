@@ -12,7 +12,7 @@ use std::{
 
 use axum::{
     extract::{ConnectInfo, FromRequestParts},
-    http::{HeaderMap, request::Parts},
+    http::{HeaderMap, HeaderName, request::Parts},
 };
 use proto::UserId;
 
@@ -91,22 +91,23 @@ impl FromRequestParts<AppState> for ClientIp {
         let ConnectInfo(peer) = ConnectInfo::<SocketAddr>::from_request_parts(parts, state)
             .await
             .map_err(|err| AppError::Internal(err.into()))?;
-        Ok(Self(client_ip(peer.ip(), &parts.headers)))
+        Ok(Self(client_ip(peer.ip(), &parts.headers, state.client_ip_header.as_ref())))
     }
 }
 
-/// O `X-Forwarded-For` só vale quando a conexão vem do Caddy, na mesma máquina; de fora, qualquer
-/// um o inventaria. Vale o último valor, o único que o Caddy escreveu.
-fn client_ip(peer: IpAddr, headers: &HeaderMap) -> IpAddr {
+/// Com `trusted` (`CLIENT_IP_HEADER`), vale esse header: só ligue atrás de um proxy que sempre o
+/// sobrescreve. Sem ele, o `X-Forwarded-For` só vale quando a conexão vem do Caddy, na mesma
+/// máquina; de fora, qualquer um o inventaria. Vale o último valor, o único que o Caddy escreveu.
+fn client_ip(peer: IpAddr, headers: &HeaderMap, trusted: Option<&HeaderName>) -> IpAddr {
     let forwarded = headers
-        .get_all("x-forwarded-for")
+        .get_all(trusted.map_or("x-forwarded-for", HeaderName::as_str))
         .iter()
         .next_back()
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.rsplit(',').next())
         .and_then(|v| v.trim().parse().ok());
     let ip = match forwarded {
-        Some(ip) if peer.to_canonical().is_loopback() => ip,
+        Some(ip) if trusted.is_some() || peer.to_canonical().is_loopback() => ip,
         _ => peer,
     };
     match ip.to_canonical() {
@@ -170,7 +171,7 @@ mod tests {
         for value in forwarded {
             headers.append("x-forwarded-for", value.parse().unwrap());
         }
-        client_ip(peer.parse().unwrap(), &headers).to_string()
+        client_ip(peer.parse().unwrap(), &headers, None).to_string()
     }
 
     #[test]
@@ -183,6 +184,20 @@ mod tests {
         assert_eq!(ip("127.0.0.1", &["1.1.1.1", "203.0.113.7"]), "203.0.113.7");
         assert_eq!(ip("127.0.0.1", &["lixo"]), "127.0.0.1");
         assert_eq!(ip("::1", &[]), "::1");
+    }
+
+    #[test]
+    fn a_trusted_header_counts_from_any_peer_and_replaces_x_forwarded_for() {
+        let trusted = HeaderName::from_static("cf-connecting-ip");
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.1.1.1".parse().unwrap());
+        let ip = |peer: &str, headers: &HeaderMap| {
+            client_ip(peer.parse().unwrap(), headers, Some(&trusted)).to_string()
+        };
+        assert_eq!(ip("10.0.0.1", &headers), "10.0.0.1");
+        assert_eq!(ip("127.0.0.1", &headers), "127.0.0.1");
+        headers.insert("cf-connecting-ip", "203.0.113.7".parse().unwrap());
+        assert_eq!(ip("10.0.0.1", &headers), "203.0.113.7");
     }
 
     #[test]

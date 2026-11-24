@@ -25,7 +25,7 @@ if (Test-Path $pacote) { Remove-Item $pacote -Recurse -Force -Confirm:$false }
 New-Item -ItemType Directory $pacote | Out-Null
 
 Write-Host "Compilando o servidor (Linux)"
-docker build --platform linux/amd64 -f "$raiz\deploy\Dockerfile" --output "type=local,dest=$pacote" $raiz
+docker build --platform linux/amd64 --target binario -f "$raiz\deploy\Dockerfile" --output "type=local,dest=$pacote" $raiz
 Assert-Ok "docker build"
 
 Write-Host "Compilando o client"

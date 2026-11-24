@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use axum::http::HeaderValue;
+use axum::http::{HeaderName, HeaderValue};
 use sqlx::PgPool;
 
 use crate::{
@@ -24,6 +24,8 @@ pub struct AppState {
     pub livekit: Arc<LiveKit>,
     pub voice_states: Arc<VoiceStates>,
     pub limits: Arc<Limits>,
+    /// Header com o IP do client, escrito por um proxy na frente (ver `limit.rs`).
+    pub client_ip_header: Option<HeaderName>,
     /// Prazo das mensagens, para o client avisar até onde vai o histórico.
     pub message_ttl_days: u32,
 }
@@ -47,6 +49,7 @@ impl AppState {
             livekit: Arc::new(livekit),
             voice_states: Arc::new(VoiceStates::new()),
             limits: Arc::default(),
+            client_ip_header: None,
             message_ttl_days,
         }
     }

@@ -7,3 +7,7 @@
 !server
 !web/Cargo.toml
 !web/src
+!web/Trunk.toml
+!web/index.html
+!web/style.css
+!web/vendor
