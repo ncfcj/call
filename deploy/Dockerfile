@@ -28,7 +28,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,targe
 FROM debian:bookworm-slim
 COPY --from=server /call-server /usr/local/bin/
 COPY --from=web /web /web
-ENV WEB_DIR=/web BIND_ADDR=0.0.0.0:10000
+ENV WEB_DIR=/web BIND_ADDR=0.0.0.0:10000 LOG_FORMAT=json
 EXPOSE 10000
 USER nobody
 CMD ["call-server"]

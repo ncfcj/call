@@ -97,6 +97,8 @@ pub async fn login(
     // Mesmo sem usuário, roda o Argon2 (contra um hash fictício) para não vazar pelo tempo.
     let stored = row.as_ref().map(|r| r.password_hash.clone());
     if !password::verify(req.password, stored).await? {
+        // Sem o nome: às vezes a pessoa digita a senha no campo errado.
+        tracing::warn!(%ip, "login recusado");
         return Err(AppError::InvalidCredentials);
     }
     let row = row.ok_or(AppError::InvalidCredentials)?;

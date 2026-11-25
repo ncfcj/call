@@ -9,6 +9,7 @@ pub mod limit;
 pub mod retention;
 pub mod routes;
 pub mod state;
+pub mod trace;
 pub mod voice;
 pub mod voice_state;
 pub mod ws;

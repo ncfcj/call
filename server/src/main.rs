@@ -2,20 +2,22 @@ use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Context;
 use sqlx::postgres::PgPoolOptions;
-use tower_http::trace::TraceLayer;
 use tracing_subscriber::EnvFilter;
 
-use call_server::{config::Config, retention, routes, state::AppState};
+use call_server::{config::Config, retention, routes, state::AppState, trace};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("call_server=debug,tower_http=info")),
-        )
-        .init();
+    let log = tracing_subscriber::fmt().with_env_filter(
+        EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("call_server=debug,tower_http=info")),
+    );
+    if std::env::var("LOG_FORMAT").is_ok_and(|format| format == "json") {
+        log.json().init();
+    } else {
+        log.init();
+    }
 
     let config = Config::from_env()?;
 
@@ -45,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
     if let Some(dir) = &config.web_dir {
         app = routes::serve_web(app, dir, &config.livekit.url)?;
     }
-    let app = app.layer(config.cors_layer()).layer(TraceLayer::new_for_http());
+    let app = app.layer(config.cors_layer()).layer(trace::layer());
 
     // Um listener por endereço, todos com o mesmo app (o mesmo estado e o mesmo hub).
     let mut servers = tokio::task::JoinSet::new();

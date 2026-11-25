@@ -70,7 +70,7 @@ pub async fn upgrade(
 
 async fn run(state: AppState, user: UserId, mut socket: WebSocket) {
     let (conn, mut queue) = state.hub.register(user);
-    tracing::debug!(conn, %user, "WS conectado");
+    tracing::info!(conn, %user, "WS conectado");
 
     let hello = ServerEvent::Hello {
         heartbeat_interval_ms: HEARTBEAT_INTERVAL_MS,
@@ -117,7 +117,7 @@ async fn run(state: AppState, user: UserId, mut socket: WebSocket) {
 
     state.hub.unregister(conn);
     let _ = socket.send(WsMessage::Close(None)).await;
-    tracing::debug!(conn, %user, "WS desconectado");
+    tracing::info!(conn, %user, "WS desconectado");
 }
 
 /// Trata um evento do client. Devolve a resposta direta, se houver.

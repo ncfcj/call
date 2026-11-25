@@ -187,7 +187,7 @@ Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o de
 > **Hospedagem (2026-11-23):** o cadastro na Oracle não deu certo e, por ora, não pode haver custo nem domínio próprio. O Call vai para o Render grátis, com o Neon como banco: um serviço só entrega o client e a API na mesma origem, compilado pelo `deploy/Dockerfile` e descrito no `render.yaml`. Isso junta a 3c e a 3d e deixa de usar Oracle, Caddy e Cloudflare Pages; os cabeçalhos de segurança da 3d passam para o servidor. O serviço dorme após 15 min sem uso e leva cerca de 1 min para acordar. Os arquivos para VM (`deploy/instalar.sh`, `scripts/deploy.ps1`) ficam para quando houver uma. As etapas 3a a 3c entraram na `main` pelo PR #10; as demais seguem em outro PR.
 
 - [x] **3c. API em produção.** Render e Neon em Ohio, deploy manual pelo `render.yaml`, migrations aplicadas na subida e segredos só no painel. Criar conta exige o código `SIGNUP_CODE`. No ar em `https://call-70hr.onrender.com`. Validada com duas contas
-- [ ] **3d. Front em produção.** O servidor já entrega o client na mesma origem. Falta enviar os cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`)
+- [ ] **3d. Front em produção.** O servidor entrega o client na mesma origem, com os cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`). Falta validar com login e voz depois do deploy de `366fb3a`
 - [ ] **3e. Voz em produção.** LiveKit Cloud, com o webhook apontando para `https://call-70hr.onrender.com/livekit/webhook`. Fecha o critério pendente da Fase 2: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa)
 - [ ] **3f. Monitoramento e observabilidade.** Logs, métricas, alertas e o painel de cotas (minutos do LiveKit, armazenamento do Neon). Detalhes abaixo
 - [ ] **3g. Desktop Windows com Tauri.** Instalador MSI ou NSIS com o mesmo client Leptos, apontando para a API de produção. Conferir microfone e voz no WebView2. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
@@ -219,7 +219,7 @@ Ferramentas previstas, todas com plano gratuito:
 
 Etapas:
 
-- [ ] **Logs estruturados:** `tracing-subscriber` em JSON em produção (texto legível em dev), com `request_id` por requisição (`tower-http` `TraceLayer`), usuário, guild e canal nos spans. Nunca logar senha, token, cookie nem o texto das mensagens
+- [x] **Logs estruturados:** `tracing-subscriber` em JSON em produção (texto legível em dev), com `request_id` por requisição (`tower-http` `TraceLayer`), usuário, guild e canal nos spans. Nunca logar senha, token, cookie nem o texto das mensagens
 - [ ] **Métricas:** endpoint `/metrics` em formato Prometheus (crate `metrics` + `metrics-exporter-prometheus`), fechado para a internet. Medir: latência e status por rota, conexões WebSocket abertas, mensagens por minuto, participantes em voz, falhas de login, tamanho do pool do Postgres. O LiveKit já expõe as próprias métricas (`prometheus_port`)
 - [ ] **Health mais completo:** `/health` passa a conferir o Postgres e o LiveKit, para a checagem externa pegar uma dependência fora do ar
 - [ ] **Erros:** Sentry no servidor (panics e `AppError` 5xx) e no client (erros de JS e panics do WASM via `console_error_panic_hook`)
