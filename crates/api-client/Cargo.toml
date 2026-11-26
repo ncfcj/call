@@ -13,13 +13,14 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+futures = "0.3"
 
 # No app desktop: TLS próprio e o cookie de refresh guardado pelo cliente (no navegador, é o fetch).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 reqwest = { workspace = true, features = ["cookies", "rustls"] }
+tokio-tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-futures = "0.3"
 gloo-net = { version = "0.8", default-features = false, features = ["websocket"] }
 
 [dev-dependencies]
@@ -27,7 +28,7 @@ uuid.workspace = true
 
 # A API falsa dos testes de sessão (tests/session.rs) só roda no alvo nativo.
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["ws"] }
 serde_json.workspace = true
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net"] }
 

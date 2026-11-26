@@ -9,7 +9,6 @@
 //! [`ApiClient::refresh_cookie`] e [`ApiClient::restore_refresh_cookie`] levam o de refresh
 //! para fora e de volta, para a sessão sobreviver a fechar o app.
 
-#[cfg(target_arch = "wasm32")]
 pub mod ws;
 
 use std::sync::{Arc, Mutex};

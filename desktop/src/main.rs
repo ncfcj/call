@@ -3,12 +3,15 @@
 // Sem a janela do console no build de release.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod chat;
+mod gateway;
 mod session;
 mod theme;
 
 use api_client::{ApiClient, ApiError};
+use chat::Chat;
 use iced::{
-    Border, Element, Length, Size, Task,
+    Element, Length, Size, Subscription, Task,
     widget::{button, column, container, row, text, text_input},
 };
 use proto::{LoginRequest, RegisterRequest, User};
@@ -20,6 +23,7 @@ fn main() -> iced::Result {
     iced::application(boot, update, view)
         .title("Call")
         .theme(|_: &State| theme::theme())
+        .subscription(subscription)
         .window_size(Size::new(1100.0, 720.0))
         .run()
 }
@@ -55,7 +59,7 @@ enum Screen {
     /// Conferindo se a sessão salva ainda vale. O Render free pode levar um minuto para acordar.
     Booting,
     Auth(Auth),
-    Home(User),
+    Home(Box<Chat>),
 }
 
 #[derive(Debug, Clone)]
@@ -69,21 +73,27 @@ enum Message {
     InviteCode(String),
     Submit,
     Authed(Result<User, String>),
-    Logout,
     LoggedOut,
+    /// Mensagem do chat da sessão `epoch`; as de uma sessão anterior são descartadas.
+    Chat(u64, chat::Msg),
 }
 
 struct State {
     api: ApiClient,
     screen: Screen,
+    /// Conta os logins, para separar as tarefas de uma sessão das da anterior.
+    epoch: u64,
+    /// O cookie que está no cofre, para só regravar quando o refresh o trocar.
+    saved: Option<String>,
 }
 
 fn boot() -> (State, Task<Message>) {
     let url = std::env::var("CALL_API_URL").unwrap_or_else(|_| DEFAULT_API_URL.to_owned());
     let api = ApiClient::new(url);
-    let task = match session::load(api.base_url()) {
+    let saved = session::load(api.base_url());
+    let task = match &saved {
         Some(cookie) => {
-            api.restore_refresh_cookie(&cookie);
+            api.restore_refresh_cookie(cookie);
             let api = api.clone();
             Task::perform(
                 async move {
@@ -99,22 +109,24 @@ fn boot() -> (State, Task<Message>) {
         }
         None => Task::done(Message::Booted(None, None)),
     };
-    (State { api, screen: Screen::Booting }, task)
+    (State { api, screen: Screen::Booting, epoch: 0, saved }, task)
 }
 
 fn update(state: &mut State, message: Message) -> Task<Message> {
-    let api = &state.api;
     match message {
         Message::Booted(user, error) => {
-            state.screen = match user {
-                Some(user) => Screen::Home(user),
-                None => Screen::Auth(Auth::new(error)),
+            sync_session(state);
+            return match user {
+                Some(user) => start_chat(state, user),
+                None => {
+                    state.screen = Screen::Auth(Auth::new(error));
+                    Task::none()
+                }
             };
-            save_session(api);
         }
         Message::Authed(Ok(user)) => {
-            save_session(api);
-            state.screen = Screen::Home(user);
+            sync_session(state);
+            return start_chat(state, user);
         }
         Message::Authed(Err(message)) => {
             if let Screen::Auth(auth) = &mut state.screen {
@@ -122,27 +134,67 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
                 auth.error = Some(message);
             }
         }
-        Message::Logout => {
+        Message::Chat(_, chat::Msg::Logout) => {
             // Sai já do cofre e da tela: se o app fechar antes de a API responder, a sessão não
             // volta na próxima abertura.
-            session::save(api.base_url(), None);
+            session::save(state.api.base_url(), None);
+            state.saved = None;
             state.screen = Screen::Auth(Auth::new(None));
-            let api = api.clone();
+            let api = state.api.clone();
             return Task::perform(async move { api.logout().await }, |_| Message::LoggedOut);
         }
-        Message::LoggedOut => save_session(api),
+        Message::LoggedOut => sync_session(state),
+        Message::Chat(epoch, msg) => {
+            let Screen::Home(chat) = &mut state.screen else { return Task::none() };
+            if epoch != state.epoch {
+                return Task::none();
+            }
+            let task = chat.update(msg);
+            if chat.expired {
+                state.screen =
+                    Screen::Auth(Auth::new(Some("Sua sessão expirou. Entre de novo.".into())));
+            }
+            sync_session(state);
+            return task.map(move |msg| Message::Chat(epoch, msg));
+        }
         other => {
             if let Screen::Auth(auth) = &mut state.screen {
-                return edit_auth(api, auth, other);
+                return edit_auth(&state.api, auth, other);
             }
         }
     }
     Task::none()
 }
 
+/// Entrou: abre o chat de uma sessão nova.
+fn start_chat(state: &mut State, user: User) -> Task<Message> {
+    state.epoch += 1;
+    let epoch = state.epoch;
+    let (chat, task) = Chat::new(state.api.clone(), user);
+    state.screen = Screen::Home(Box::new(chat));
+    task.map(move |msg| Message::Chat(epoch, msg))
+}
+
+/// O WebSocket e o relógio do chat, só com a sessão aberta.
+fn subscription(state: &State) -> Subscription<Message> {
+    if !matches!(state.screen, Screen::Home(_)) {
+        return Subscription::none();
+    }
+    Subscription::batch([
+        gateway::subscription(&state.api, state.epoch).map(chat::Msg::Gateway),
+        iced::time::every(std::time::Duration::from_secs(1)).map(|_| chat::Msg::Tick),
+    ])
+    .with(state.epoch)
+    .map(|(epoch, msg)| Message::Chat(epoch, msg))
+}
+
 /// O cookie muda a cada refresh e some no logout; o cofre acompanha.
-fn save_session(api: &ApiClient) {
-    session::save(api.base_url(), api.refresh_cookie().as_deref());
+fn sync_session(state: &mut State) {
+    let cookie = state.api.refresh_cookie();
+    if cookie != state.saved {
+        session::save(state.api.base_url(), cookie.as_deref());
+        state.saved = cookie;
+    }
 }
 
 fn edit_auth(api: &ApiClient, auth: &mut Auth, message: Message) -> Task<Message> {
@@ -188,14 +240,10 @@ fn view(state: &State) -> Element<'_, Message> {
     let content = match &state.screen {
         Screen::Booting => text("Conectando ao servidor...").color(theme::MUTED).into(),
         Screen::Auth(auth) => auth_view(auth),
-        Screen::Home(user) => card(
-            column![
-                text!("Olá, {}", user.display_name).size(28),
-                text("Servidores, canais e chat chegam na próxima etapa.").color(theme::MUTED),
-                button("Sair").on_press(Message::Logout).style(button::secondary),
-            ]
-            .spacing(16),
-        ),
+        Screen::Home(chat) => {
+            let epoch = state.epoch;
+            return chat.view().map(move |msg| Message::Chat(epoch, msg));
+        }
     };
     container(content).center(Length::Fill).into()
 }
@@ -241,13 +289,5 @@ fn auth_view(auth: &Auth) -> Element<'_, Message> {
 }
 
 fn card<'a>(content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
-    container(content)
-        .padding(32)
-        .max_width(380)
-        .style(|_| container::Style {
-            background: Some(theme::SURFACE_CARD.into()),
-            border: Border { radius: 12.0.into(), ..Border::default() },
-            ..container::Style::default()
-        })
-        .into()
+    container(content).padding(32).max_width(380).style(|_| chat::card_style()).into()
 }

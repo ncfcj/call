@@ -10,6 +10,9 @@ publish.workspace = true
 [dependencies]
 api-client.workspace = true
 proto.workspace = true
+call-core.workspace = true
+chrono = { workspace = true, features = ["clock"] }
+tokio = { version = "1", features = ["macros", "time"] }
 iced = { version = "0.14", features = ["tokio"] }
 
 # A sessão fica no Cofre de Credenciais do Windows.

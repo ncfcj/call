@@ -44,6 +44,9 @@ $env:CALL_API_URL="http://127.0.0.1:3000"; cargo run -p call-desktop
 A sessão fica no Cofre de Credenciais do Windows (uma entrada por API), então o app abre já
 logado. O botão Sair apaga a entrada.
 
+Testes do app: `scripts	este-desktop.ps1` (login e sessão) e `scripts	este-desktop-chat.ps1`
+(servidores e chat, com o robô do `teste-client.ps1` conversando com você).
+
 Client web, em outro terminal:
 
 ```powershell
