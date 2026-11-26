@@ -58,8 +58,10 @@ async fn requests_are_logged_with_context_and_without_secrets(db: PgPool) {
     assert_eq!(login.status, StatusCode::UNAUTHORIZED);
 
     let text = String::from_utf8(log.0.lock().unwrap().clone()).unwrap();
-    for secret in ["secret", "senha-forte-1", token, me.refresh_cookie.as_deref().unwrap()] {
-        assert!(!text.contains(secret), "vazou {secret}: {text}");
+    let secrets = ["secret", "senha-forte-1", token, me.refresh_cookie.as_deref().unwrap()];
+    for (i, secret) in secrets.into_iter().enumerate() {
+        // Sem o segredo na mensagem: a falha do teste não pode ser ela mesma um vazamento.
+        assert!(!text.contains(secret), "o segredo nº {i} apareceu no log");
     }
     let lines: Vec<Value> = text.lines().map(|l| serde_json::from_str(l).unwrap()).collect();
     let sent = lines
