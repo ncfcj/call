@@ -4,11 +4,11 @@ Nov 20, 2026 · @Nilton
 
 ## Resumo e premissas
 
-Recomendação: um servidor Rust (axum + tokio + sqlx) cuida de autenticação, servidores/canais, chat via WebSocket e emissão de tokens de voz. A mídia de áudio fica num SFU pronto (LiveKit), e não em código próprio. O client também é em Rust (Leptos compilado para WebAssembly): roda no navegador e, empacotado no Tauri, vira o app Windows leve, com o mesmo código.
+Recomendação: um servidor Rust (axum + tokio + sqlx) cuida de autenticação, servidores/canais, chat via WebSocket e emissão de tokens de voz. A mídia de áudio fica num SFU pronto (LiveKit), e não em código próprio. O client principal é um app desktop nativo em Rust (iced, com o SDK Rust do LiveKit para a voz), sem WebView, para gastar o mínimo de CPU, GPU e memória. A versão web (Leptos em WebAssembly) veio primeiro e fica congelada, só com correções.
 
 Premissas adotadas por padrão (mude se não servirem):
 
-- **Web primeiro, Tauri na Fase 3.** O Tauri reaproveita 100% da UI web. O Push-to-Talk fica para depois do MVP e entra junto com o Tauri, que permite um atalho global.
+- **Desktop first.** O produto é o app nativo para Windows (Fase 4). A web e um futuro mobile são secundários e podem ser descontinuados se atrapalharem. O Push-to-Talk com atalho global entra no app nativo.
 - **SFU gerenciado no início (LiveKit Cloud, plano Build gratuito) e self-host como saída.** O mesmo SDK funciona nos dois casos, então trocar é questão de mudar a URL e as chaves.
 - **Servidor Rust sempre ligado numa VM gratuita (Oracle Always Free).** PaaS gratuitos que hibernam derrubam WebSockets.
 - **Grupo pequeno:** até \~10 pessoas por canal de voz, só áudio, sem vídeo e sem compartilhamento de tela no MVP.
@@ -34,16 +34,18 @@ Os três fluxos que o MVP precisa provar:
 
 ## Stack do client
 
-Escolha: o client é escrito em Rust com **Leptos** (modo CSR, compilado para WebAssembly com Trunk). O mesmo app roda no navegador e, dentro do **Tauri 2**, vira o client Windows leve. O Tauri usa o WebView2, que já vem no Windows 10/11, e por isso o instalador é pequeno e o consumo de memória fica bem abaixo de um app Electron.
+**Mudança de decisão (26/11/2026):** o projeto passou a ser desktop first, com consumo mínimo de CPU e GPU como objetivo. Um WebView (Tauri) ainda roda um motor de navegador inteiro, então o client desktop passa a ser nativo: **iced** para a UI e o crate `livekit` (SDK Rust, com o libwebrtc nativo) para a voz. Os crates `proto`, `api-client` e `core` são reaproveitados; a UI Leptos e a ponte JS do `voice` ficam só na web. Detalhes na Fase 4. O texto abaixo é a escolha original, mantida porque a web continua no ar.
+
+Escolha original: o client é escrito em Rust com **Leptos** (modo CSR, compilado para WebAssembly com Trunk). O mesmo app roda no navegador e, dentro do **Tauri 2**, vira o client Windows leve. O Tauri usa o WebView2, que já vem no Windows 10/11, e por isso o instalador é pequeno e o consumo de memória fica bem abaixo de um app Electron.
 
 A voz usa o WebRTC do navegador ou do WebView, tanto na web quanto no Tauri. O client Rust chama o SDK JS `livekit-client` por uma ponte fina de `wasm-bindgen`. O SDK Rust do LiveKit não entra aqui, porque depende do libwebrtc nativo e não roda em WASM.
 
 | Opção | Reaproveitamento web ↔ Windows | Peso no Windows | Voz | Situação |
 | --- | --- | --- | --- | --- |
-| **Leptos (Rust → WASM) + Tauri 2** | Praticamente total: o mesmo código nos dois | Leve: WebView2 do sistema, instalador de poucos MB | `livekit-client` via `wasm-bindgen`, igual nos dois alvos | **Escolhida** |
+| Leptos (Rust → WASM) + Tauri 2 | Praticamente total: o mesmo código nos dois | Leve: WebView2 do sistema, instalador de poucos MB | `livekit-client` via `wasm-bindgen`, igual nos dois alvos | Escolhida no início; hoje só a web (sem o Tauri) |
 | Dioxus (Rust → WASM, desktop próprio) | Praticamente total, com um CLI para web e desktop | Leve, com WebView próprio em vez do Tauri | Mesma ponte JS | Alternativa equivalente. Perde os plugins do Tauri (atalho global, instalador, updater) |
 | React + TS + Tauri | Total | Igual ao Leptos | SDK JS direto, sem ponte | Descartada: a UI não seria em Rust |
-| UI nativa (iced, egui, Slint) + SDK Rust do LiveKit | Parcial: a UI web desenha em canvas e a voz precisa de duas implementações | O mais leve, sem WebView | libwebrtc nativo, com build pesado no Windows | Só se o consumo mínimo de memória virar diferencial |
+| **UI nativa (iced, egui, Slint) + SDK Rust do LiveKit** | Parcial: a UI web desenha em canvas e a voz precisa de duas implementações | O mais leve, sem WebView | libwebrtc nativo (o crate baixa o binário pronto) | **Escolhida para o desktop (iced)**: o consumo mínimo virou o objetivo |
 
 **Crates do client no workspace Cargo** (a UI pode ser trocada sem reescrever o resto):
 
@@ -54,7 +56,7 @@ A voz usa o WebRTC do navegador ou do WebView, tanto na web quanto no Tauri. O c
 | `core` | Estado de servidores, canais, presença e voz, sem dependência de UI | WASM |
 | `voice` | Ponte `wasm-bindgen` com o `livekit-client`: conectar, sair, ligar/desligar microfone, deaf, eventos de quem fala e de participantes | WASM |
 | `web` | Componentes Leptos, roteamento e o build Trunk | WASM |
-| `src-tauri` | Casca desktop: janela, instalador e, no pós-MVP, o atalho global de PTT | Windows nativo |
+| `desktop` | App nativo em iced: telas, voz com o crate `livekit`, instalador e o atalho global de PTT (substitui o `src-tauri` previsto) | Windows nativo |
 
 Custo dessa escolha: o ecossistema de componentes é menor que o do React e a ponte com o JS do LiveKit é escrita à mão. Para conter isso, mantenha a ponte `voice` pequena (cerca de seis funções e dois tipos de evento) e com testes no navegador.
 
@@ -190,7 +192,7 @@ Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o de
 - [ ] **3d. Front em produção.** O servidor entrega o client na mesma origem, com os cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`). Falta validar com login e voz depois do deploy de `366fb3a`
 - [ ] **3e. Voz em produção.** LiveKit Cloud, com o webhook apontando para `https://call-70hr.onrender.com/livekit/webhook`. Fecha o critério pendente da Fase 2: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa)
 - [x] **3f. Monitoramento e observabilidade.** Reduzida para o Render free: logs em JSON no painel do Render e erros, logs e traces no Sentry, com alerta por e-mail em issue de alta prioridade. Ficaram para quando houver uma máquina que não dorme: métricas, Grafana, checagem externa e alertas de cota (um ping a cada poucos minutos mantém o Render e o Neon acordados e gasta as 750 h do mês). Cotas: olhar à mão os painéis do LiveKit, do Neon e do Render. Detalhes abaixo
-- [ ] **3g. Desktop Windows com Tauri.** Instalador MSI ou NSIS com o mesmo client Leptos, apontando para a API de produção. Conferir microfone e voz no WebView2. Pós-MVP: Push-to-Talk com tecla configurável e atalho global via `global-shortcut`
+- [x] ~~**3g. Desktop Windows com Tauri.**~~ Cancelada: o desktop passa a ser nativo, na Fase 4
 - [ ] **3h. Teste de aceite.** Cinco pessoas numa call de 30 min na URL pública, com o painel aberto: sem quedas, e o consumo projetado do mês dentro das cotas
 
 | Etapa | Depende de | Teste funcional |
@@ -201,7 +203,6 @@ Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o de
 | 3d. Front no Pages | 3c | Cadastro, login e chat entre dois navegadores na URL pública; recarregar a página mantém a sessão |
 | 3e. Voz em produção | 3c, 3d | Chamada entre 4G e Wi-Fi de outra rede; o estado de voz aparece para os outros |
 | 3f. Monitoramento | 3c | Parar o serviço de propósito gera um alerta; um erro 500 aparece no Sentry |
-| 3g. Desktop Windows | 3d, 3e | Instalar o MSI numa máquina limpa, entrar e falar numa chamada |
 | 3h. Teste de aceite | Todas | Cinco pessoas, 30 min, sem quedas |
 
 #### Monitoramento e observabilidade
@@ -226,7 +227,7 @@ Etapas:
 - [ ] **Erros (client):** adiado. O SDK de JS num app WASM dá frames ilegíveis e exige afrouxar a CSP
 - [ ] **Alertas:** servidor fora do ar por mais de 2 checagens; taxa de 5xx acima de 1% em 5 min; latência p95 acima de 500 ms; pico de falhas de login (possível força bruta); cotas acima de 80% (minutos do LiveKit, armazenamento do Neon, egress da Oracle); disco ou memória da VM acima de 85%
 - [ ] **Painel:** uma tela no Grafana com uso, erros, latência e cotas do mês
-- [ ] **Retenção dos logs:** prazo curto (14 dias, o do plano gratuito), coerente com o TTL das mensagens e com a Fase 4
+- [ ] **Retenção dos logs:** prazo curto (14 dias, o do plano gratuito), coerente com o TTL das mensagens e com a Fase 5
 
 Pronto quando: derrubar o servidor ou o Postgres de propósito gera um alerta em poucos minutos, um erro 500 aparece no Sentry com a requisição que o causou, e o painel mostra o consumo das cotas do mês.
 
@@ -236,7 +237,7 @@ Objetivo: o banco guarda só as mensagens recentes, e o custo de armazenamento p
 
 Decisões a tomar:
 
-- [x] **Prazo padrão.** 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 4)
+- [x] **Prazo padrão.** 30 dias. Quanto menor o prazo, menor o custo e menos dado para proteger (Fase 5)
 - [x] **Quem escolhe.** Um prazo global (`MESSAGE_TTL_DAYS`). A outra opção era um prazo por servidor (guild), que o dono pode reduzir mas não aumentar além do global
 - [ ] **Limite por quantidade.** Opcional: manter no máximo N mensagens por canal, além do prazo
 
@@ -250,7 +251,29 @@ Implementação prevista:
 
 Pronto quando: mensagens mais velhas que o prazo somem sozinhas, o tamanho de `messages` se estabiliza com o uso contínuo, e o client deixa claro até onde vai o histórico.
 
-### Fase 4: segurança dos dados (pós-MVP, data a definir)
+### Fase 4: client desktop nativo (Windows)
+
+Objetivo: o app principal do Call, nativo, sem WebView, com consumo mínimo de CPU, GPU e memória. Mesma API e mesmo LiveKit da web; o servidor não muda.
+
+Stack:
+
+- **UI:** `iced` (MIT, arquitetura Elm, redesenha só quando o estado muda, GPU via `wgpu` com fallback em software). Visual do `DESIGN.md`.
+- **Voz:** crate `livekit` (SDK Rust), que traz o libwebrtc nativo com o processamento de áudio dele (eco, ruído, ganho) e o Opus.
+- **Reaproveitado:** `proto`, `api-client` (precisa de transporte nativo para o WebSocket) e `core` (estado e regras, sem UI).
+- **Sessão:** o refresh token continua no cookie, guardado pelo próprio client (cookie jar do `reqwest`) e salvo no Cofre de Credenciais do Windows, não em arquivo.
+
+Etapas (um commit e um teste funcional por etapa):
+
+- [ ] **4a. Esqueleto e login.** Janela iced, cadastro e login na API de produção ou local, sessão que sobrevive a fechar e abrir o app. Teste: abrir o app, entrar, fechar, abrir de novo e continuar logado
+- [ ] **4b. Servidores, canais e chat.** Lista de servidores e canais, histórico com rolagem, envio, digitando e presença pelo WebSocket, com reconexão. Teste: conversar entre o app e um navegador na web
+- [ ] **4c. Voz.** Entrar e sair do canal de voz, mudo, ensurdecer, quem está falando e escolha de microfone e saída. Teste: chamada entre o app e a web, em redes diferentes
+- [ ] **4d. Instalador.** Instalador para Windows (MSI ou NSIS) com ícone e atalho. Teste: instalar numa máquina limpa, entrar e falar
+- [ ] **4e. Medição.** CPU, GPU e memória parado e numa chamada, comparados com a web no Chrome. Metas iniciais: perto de 0% de CPU parado e abaixo de 150 MB de memória numa chamada
+- [ ] **4f. Push-to-Talk.** Tecla configurável com atalho global (crate `global-hotkey`)
+
+Pronto quando: o teste de aceite (cinco pessoas, 30 min) passa com o app nativo e a medição da 4e fica dentro das metas.
+
+### Fase 5: segurança dos dados (pós-MVP, data a definir)
 
 Hoje o texto das mensagens fica puro no Postgres, protegido só pelo TLS da conexão e pela criptografia de disco do provedor. O áudio já trafega cifrado (DTLS-SRTP do WebRTC) entre o client e o SFU, mas o SFU decifra cada pacote para encaminhar. Esta fase decide até onde ir, em dois níveis:
 
@@ -262,7 +285,7 @@ Hoje o texto das mensagens fica puro no Postgres, protegido só pelo TLS da cone
 - [ ] Decidir o nível (A, B ou A agora e B depois) e o modelo de ameaça: vazamento do banco, operador do servidor, provedor do SFU
 - [ ] Texto, nível A: coluna `content` em `BYTEA` com nonce, chave por servidor derivada de uma chave mestra fora do banco (variável de ambiente ou KMS), migração das mensagens existentes e rotação de chave
 - [ ] Texto, nível B: chaves no client (WebCrypto ou `openmls` em WASM), convite que entrega a chave do grupo, troca de chave quando alguém sai, e o que acontece com o histórico de quem entra depois
-- [ ] Áudio, nível B: ativar o E2EE do `livekit-client` na ponte do crate `voice` e conferir o suporte no Firefox, no Chrome e no WebView2 do Tauri
+- [ ] Áudio, nível B: ativar o E2EE do LiveKit no app nativo (SDK Rust) e na ponte `voice` da web, e conferir o suporte no Firefox e no Chrome
 - [ ] Revisar o que continua visível mesmo com E2EE: quem fala com quem e quando, nomes de servidores e canais, presença
 
 Impactos a considerar antes de escolher:
@@ -312,7 +335,7 @@ Quem compartilha a tela pode dar a outra pessoa o controle do mouse e do teclado
 
 - Depende de compartilhamento de tela, que está fora do MVP.
 - O host precisa autorizar cada sessão de controle e poder revogar na hora.
-- Exige o app desktop (Tauri) no host: o navegador não consegue injetar mouse e teclado no sistema.
+- Exige o app desktop no host: o navegador não consegue injetar mouse e teclado no sistema.
 
 ### Jogo e controle remoto (estilo Parsec)
 
@@ -339,6 +362,7 @@ O que mudou em relação ao plano acima, e por quê. Os detalhes estão em `docs
 | Endereço local | `127.0.0.1` | `BIND_ADDR` aceita vários endereços; o padrão escuta em `127.0.0.1` e `[::1]`, e `WEB_ORIGIN` inclui `http://[::1]:8080` | O `localhost` resolve primeiro para `::1`, e o Firefox não tenta o IPv4 depois |
 | IP da mídia do LiveKit em dev | `--node-ip 127.0.0.1` | `LIVEKIT_NODE_IP` no `.env`, com o IP da máquina na rede local | O Firefox não aceita candidatos ICE de loopback e a chamada nunca conectava |
 | Ponte JS da voz | Snippet do wasm-bindgen | `<script data-trunk>` com hash no nome, expondo o global `CallVoice` | A URL do snippet não mudava com o conteúdo; com a versão velha em cache, a integridade falhava e o app abria em branco |
+| Client desktop | Leptos dentro do Tauri (WebView2) | App nativo em iced com o SDK Rust do LiveKit (Fase 4) | O projeto virou desktop first, e um WebView roda um motor de navegador inteiro |
 | URL da API no client | Fixa no build | Mesmo host da página, na porta 3000 (ou `CALL_API_URL` no build) | O navegador trata `localhost` e `127.0.0.1` como sites diferentes e não manda o cookie de refresh |
 
 Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, com um commit e um script de teste funcional em `scripts/` por etapa.
@@ -351,7 +375,7 @@ Como cada etapa é entregue: um PR por fase da branch `fase-N` para a `main`, co
 - **Uma sessão por navegador:** o cookie de refresh é um só. Para testar com dois usuários, use dois navegadores ou uma janela anônima.
 - **Transferência de dono** e **edição ou exclusão de mensagens** ainda não existem.
 - **Voz pelo endereço `http://[::1]:8080` no Firefox:** a entrada na chamada falha, e a tentativa nem chega ao LiveKit (o Chromium funciona nesse endereço). Só afeta o desenvolvimento local: use `http://localhost:8080`. Para investigar, abra o console do Firefox (F12) ao clicar no canal de voz por `[::1]`.
-- **Criptografia das mensagens de texto e de áudio:** planejada na Fase 4.
+- **Criptografia das mensagens de texto e de áudio:** planejada na Fase 5.
 - **`chrono` sem manutenção (RUSTSEC-2026-0543):** vem do `sqlx` e da `livekit-api`; a exceção está no `deny.toml`. Migrar para `time` ou `jiff` quando as dependências permitirem.
 
 ## Riscos técnicos e mitigação
@@ -370,5 +394,5 @@ O maior risco é a conectividade, não o código: áudio que funciona no Wi-Fi d
 | Cotas gratuitas | Voz para de conectar no fim do mês. Escritas falham no banco | Acompanhe os minutos do LiveKit e o tamanho do Neon. Use LiveKit local em dev. Tenha o self-host na VM como plano B |
 | VM Oracle | Sem capacidade A1 na região. Binário x86 não roda | Escolha a região home com cuidado, porque ela não muda depois. Compile para `aarch64` na própria VM ou num runner Arm do CI. Confira a política da Oracle para instâncias ociosas |
 | Instância única | O `broadcast` em memória não escala para 2 servidores | Aceitável no MVP. Isole o fan-out atrás de um trait para trocar por Redis ou NATS depois |
-| Tauri no Linux | WebRTC instável no WebKitGTK | Desktop Linux usa a versão web até o PoC validar. Priorize Windows e macOS no Tauri |
+| Desktop nativo fora do Windows | O libwebrtc e o `wgpu` variam por sistema | Windows primeiro; Linux e macOS só depois da Fase 4 validada |
 | Ponte WASM com o livekit-client | Erros de tipo entre Rust e JS, eventos de voz perdidos, build WASM lento | Ponte mínima no crate voice, tipada dos dois lados e testada no navegador. Prove a call 1:1 por essa ponte antes de construir a UI de voz |
