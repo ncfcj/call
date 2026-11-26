@@ -60,7 +60,7 @@ uuid = { version = "1", features = ["serde"] }
 # Client (wasm32)
 console_error_panic_hook = "0.1"
 leptos = { version = "0.8", features = ["csr"] }
-reqwest = { version = "0.12", default-features = false, features = ["json"] }
+reqwest = { version = "0.13", default-features = false, features = ["json"] }
 wasm-bindgen = "0.2"
 
 # Argon2 sem otimização leva segundos por hash; otimiza só ele no perfil de dev.
