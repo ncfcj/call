@@ -29,7 +29,8 @@ $convite = Read-Host "Código de convite"
 
 Write-Host ""
 Write-Host "3. O robô vai entrar, digitar e mandar uma mensagem. Responda algumas vezes." -ForegroundColor Cyan
-Write-Host "   Crie também um canal de texto e fique nele enquanto o robô responde no # geral."
+Write-Host "   Crie um canal de texto: no campo 'Novo canal' (embaixo de CANAIS DE VOZ), digite um nome"
+Write-Host "   e clique em '+', com 'voz' desmarcado. Fique nele enquanto o robô responde no # geral."
 & "$PSScriptRoot\teste-client.ps1" -Convite $convite -Api $Api -Minutos 2
 
 $itens = @(
