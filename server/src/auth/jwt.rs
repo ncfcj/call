@@ -25,9 +25,11 @@ impl JwtKeys {
         let mut validation = Validation::new(Algorithm::HS256);
         validation.leeway = 5;
         validation.set_required_spec_claims(&["exp", "sub"]);
+        // Só falha com segredo vazio; o Config já exige pelo menos 32 bytes.
+        let invalid = "JWT_SECRET inválido";
         Self {
-            encoding: EncodingKey::from_secret(secret),
-            decoding: DecodingKey::from_secret(secret),
+            encoding: EncodingKey::from_secret(secret).expect(invalid),
+            decoding: DecodingKey::from_secret(secret).expect(invalid),
             validation,
         }
     }
