@@ -189,11 +189,11 @@ Etapas, na ordem: primeiro o que dá para fazer e testar localmente, depois o de
 > **Hospedagem (2026-11-23):** o cadastro na Oracle não deu certo e, por ora, não pode haver custo nem domínio próprio. O Call vai para o Render grátis, com o Neon como banco: um serviço só entrega o client e a API na mesma origem, compilado pelo `deploy/Dockerfile` e descrito no `render.yaml`. Isso junta a 3c e a 3d e deixa de usar Oracle, Caddy e Cloudflare Pages; os cabeçalhos de segurança da 3d passam para o servidor. O serviço dorme após 15 min sem uso e leva cerca de 1 min para acordar. Os arquivos para VM (`deploy/instalar.sh`, `scripts/deploy.ps1`) ficam para quando houver uma. As etapas 3a a 3c entraram na `main` pelo PR #10; as demais seguem em outro PR.
 
 - [x] **3c. API em produção.** Render e Neon em Ohio, deploy manual pelo `render.yaml`, migrations aplicadas na subida e segredos só no painel. Criar conta exige o código `SIGNUP_CODE`. No ar em `https://call-70hr.onrender.com`. Validada com duas contas
-- [ ] **3d. Front em produção.** O servidor entrega o client na mesma origem, com os cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`). Falta validar com login e voz depois do deploy de `366fb3a`
-- [ ] **3e. Voz em produção.** LiveKit Cloud, com o webhook apontando para `https://call-70hr.onrender.com/livekit/webhook`. Fecha o critério pendente da Fase 2: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa)
+- [x] **3d. Front em produção.** O servidor entrega o client na mesma origem, com os cabeçalhos de segurança (CSP, `X-Content-Type-Options`, `Referrer-Policy`). Validada com login e voz; o único aviso da CSP foi uma fonte pedida por uma extensão do navegador, e o bloqueio é o esperado
+- [x] **3e. Voz em produção.** LiveKit Cloud, com o webhook apontando para `https://call-70hr.onrender.com/livekit/webhook`. Fecha o critério pendente da Fase 2: duas pessoas em redes diferentes (4G e Wi-Fi de outra casa)
 - [x] **3f. Monitoramento e observabilidade.** Reduzida para o Render free: logs em JSON no painel do Render e erros, logs e traces no Sentry, com alerta por e-mail em issue de alta prioridade. Ficaram para quando houver uma máquina que não dorme: métricas, Grafana, checagem externa e alertas de cota (um ping a cada poucos minutos mantém o Render e o Neon acordados e gasta as 750 h do mês). Cotas: olhar à mão os painéis do LiveKit, do Neon e do Render. Detalhes abaixo
 - [x] ~~**3g. Desktop Windows com Tauri.**~~ Cancelada: o desktop passa a ser nativo, na Fase 4
-- [ ] **3h. Teste de aceite.** Cinco pessoas numa call de 30 min na URL pública, com o painel aberto: sem quedas, e o consumo projetado do mês dentro das cotas
+- [x] ~~**3h. Teste de aceite.**~~ Movida para o fim da Fase 4: o teste de aceite (cinco pessoas, 30 min, consumo dentro das cotas) é feito com o app nativo
 
 | Etapa | Depende de | Teste funcional |
 | --- | --- | --- |
