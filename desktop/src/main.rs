@@ -123,13 +123,14 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             }
         }
         Message::Logout => {
+            // Sai já do cofre e da tela: se o app fechar antes de a API responder, a sessão não
+            // volta na próxima abertura.
+            session::save(api.base_url(), None);
+            state.screen = Screen::Auth(Auth::new(None));
             let api = api.clone();
             return Task::perform(async move { api.logout().await }, |_| Message::LoggedOut);
         }
-        Message::LoggedOut => {
-            save_session(api);
-            state.screen = Screen::Auth(Auth::new(None));
-        }
+        Message::LoggedOut => save_session(api),
         other => {
             if let Screen::Auth(auth) = &mut state.screen {
                 return edit_auth(api, auth, other);

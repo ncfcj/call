@@ -53,6 +53,12 @@ async fn login() -> Response {
     ([(header::SET_COOKIE, cookie)], Json(auth_body("velho"))).into_response()
 }
 
+/// Como o servidor de verdade (`clear_refresh`): o cookie vazio, vencido, no mesmo caminho.
+async fn logout() -> Response {
+    let cookie = "refresh_token=; Path=/auth; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    (StatusCode::NO_CONTENT, [(header::SET_COOKIE, cookie)]).into_response()
+}
+
 async fn refresh(State(fake): State<Shared>, headers: HeaderMap) -> Response {
     fake.refreshes.fetch_add(1, Ordering::SeqCst);
     let cookie = headers.get(header::COOKIE).map(|v| v.to_str().unwrap().to_owned());
@@ -80,6 +86,7 @@ async fn start() -> (ApiClient, Shared) {
     let app = Router::new()
         .route("/auth/login", post(login))
         .route("/auth/refresh", post(refresh))
+        .route("/auth/logout", post(logout))
         .route("/users/@me/guilds", get(guilds))
         .with_state(fake.clone());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -101,6 +108,9 @@ async fn refresh_cookie_survives_a_new_client() {
     reopened.restore_refresh_cookie(&saved);
     assert_eq!(reopened.refresh().await.unwrap().username, "ana");
     assert_eq!(fake.seen_cookie.lock().unwrap().clone(), [Some(saved)]);
+
+    reopened.logout().await.unwrap();
+    assert_eq!(reopened.refresh_cookie(), None, "o logout apaga o cookie");
 }
 
 async fn sign_in(api: &ApiClient) {
