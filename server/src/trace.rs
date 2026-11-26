@@ -3,7 +3,7 @@
 use axum::{extract::MatchedPath, http::Request};
 use tower_http::{
     classify::{ServerErrorsAsFailures, SharedClassifier},
-    trace::{DefaultOnResponse, TraceLayer},
+    trace::{DefaultOnFailure, DefaultOnResponse, TraceLayer},
 };
 use tracing::{Level, Span, field::Empty};
 use uuid::Uuid;
@@ -29,4 +29,6 @@ pub fn layer<B>() -> TraceLayer<SharedClassifier<ServerErrorsAsFailures>, MakeSp
     TraceLayer::new_for_http()
         .make_span_with(span as MakeSpan<B>)
         .on_response(DefaultOnResponse::new().level(Level::INFO))
+        // WARN: o erro de verdade já é logado em ERROR (e vira issue no Sentry) por quem o causou.
+        .on_failure(DefaultOnFailure::new().level(Level::WARN))
 }

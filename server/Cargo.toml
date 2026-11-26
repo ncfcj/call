@@ -23,6 +23,7 @@ cookie = "0.18"
 dotenvy = "0.15"
 jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
 rand = "0.10"
+sentry = { version = "0.49.6", default-features = false, features = ["backtrace", "contexts", "panic", "logs", "reqwest", "rustls", "tracing"] }
 sha2 = "0.11"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "macros", "migrate"] }
 thiserror.workspace = true

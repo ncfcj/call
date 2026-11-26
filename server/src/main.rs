@@ -1,24 +1,41 @@
 use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Context;
+use sentry::integrations::tracing::{ErrorLayer, LogLayer, SpanLayer};
 use sqlx::postgres::PgPoolOptions;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
 
 use call_server::{config::Config, retention, routes, state::AppState, trace};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    let log = tracing_subscriber::fmt().with_env_filter(
-        EnvFilter::try_from_default_env()
-            .unwrap_or_else(|_| EnvFilter::new("call_server=debug,tower_http=info")),
+    // Sem SENTRY_DSN o Sentry fica desligado. O ambiente é SENTRY_ENVIRONMENT ou, sem ele,
+    // development (debug) ou production (release).
+    let _sentry = sentry::init(
+        sentry::ClientOptions::new()
+            // No Render, o commit do deploy; o Sentry liga cada erro à versão que o causou.
+            .maybe_release(
+                std::env::var("RENDER_GIT_COMMIT").ok().map(Into::into).or(sentry::release_name!()),
+            )
+            .traces_sample_rate(if cfg!(debug_assertions) { 1.0 } else { 0.1 }),
     );
-    if std::env::var("LOG_FORMAT").is_ok_and(|format| format == "json") {
-        log.json().init();
-    } else {
-        log.init();
-    }
+    let json = std::env::var("LOG_FORMAT").is_ok_and(|format| format == "json");
+    tracing_subscriber::registry()
+        .with(
+            EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| EnvFilter::new("call_server=debug,tower_http=info")),
+        )
+        .with(json.then(|| tracing_subscriber::fmt::layer().json()))
+        .with((!json).then(tracing_subscriber::fmt::layer))
+        .with(SpanLayer::new().with_filter(LevelFilter::INFO))
+        .with(LogLayer::new().with_filter(LevelFilter::INFO))
+        .with(ErrorLayer::new().with_filter(LevelFilter::ERROR))
+        .init();
+    // O Sentry começa antes do runtime, para as threads do tokio herdarem o cliente.
+    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(serve())
+}
 
+async fn serve() -> anyhow::Result<()> {
     let config = Config::from_env()?;
 
     let db = PgPoolOptions::new()

@@ -32,3 +32,6 @@ services:
         sync: false
       - key: LIVEKIT_API_SECRET
         sync: false
+      # DSN do projeto call-server no Sentry. Sem ele, o Sentry fica desligado.
+      - key: SENTRY_DSN
+        sync: false

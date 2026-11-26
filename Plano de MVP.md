@@ -222,7 +222,8 @@ Etapas:
 - [x] **Logs estruturados:** `tracing-subscriber` em JSON em produção (texto legível em dev), com `request_id` por requisição (`tower-http` `TraceLayer`), usuário, guild e canal nos spans. Nunca logar senha, token, cookie nem o texto das mensagens
 - [ ] **Métricas:** endpoint `/metrics` em formato Prometheus (crate `metrics` + `metrics-exporter-prometheus`), fechado para a internet. Medir: latência e status por rota, conexões WebSocket abertas, mensagens por minuto, participantes em voz, falhas de login, tamanho do pool do Postgres. O LiveKit já expõe as próprias métricas (`prometheus_port`)
 - [ ] **Health mais completo:** `/health` passa a conferir o Postgres e o LiveKit, para a checagem externa pegar uma dependência fora do ar
-- [ ] **Erros:** Sentry no servidor (panics e `AppError` 5xx) e no client (erros de JS e panics do WASM via `console_error_panic_hook`)
+- [x] **Erros (servidor):** Sentry, projeto `call-server`: panics e `AppError` 5xx viram issue; spans (10% em produção) e logs INFO+ vão junto. Ativo com `SENTRY_DSN`; release = commit do Render
+- [ ] **Erros (client):** adiado. O SDK de JS num app WASM dá frames ilegíveis e exige afrouxar a CSP
 - [ ] **Alertas:** servidor fora do ar por mais de 2 checagens; taxa de 5xx acima de 1% em 5 min; latência p95 acima de 500 ms; pico de falhas de login (possível força bruta); cotas acima de 80% (minutos do LiveKit, armazenamento do Neon, egress da Oracle); disco ou memória da VM acima de 85%
 - [ ] **Painel:** uma tela no Grafana com uso, erros, latência e cotas do mês
 - [ ] **Retenção dos logs:** prazo curto (14 dias, o do plano gratuito), coerente com o TTL das mensagens e com a Fase 4
