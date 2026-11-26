@@ -26,9 +26,11 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry --mount=type=cache,targe
     && find /web -type f -exec gzip -9 --keep {} +
 
 FROM debian:bookworm-slim
+# Certificados para o envio ao Sentry por HTTPS.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=server /call-server /usr/local/bin/
 COPY --from=web /web /web
-ENV WEB_DIR=/web BIND_ADDR=0.0.0.0:10000
+ENV WEB_DIR=/web BIND_ADDR=0.0.0.0:10000 LOG_FORMAT=json
 EXPOSE 10000
 USER nobody
 CMD ["call-server"]

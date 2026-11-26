@@ -5,15 +5,16 @@ mod health;
 mod messages;
 mod users;
 pub(crate) mod voice;
+mod web;
 
 use axum::{
     Router,
     extract::DefaultBodyLimit,
-    http::{HeaderValue, header},
     middleware::map_response,
     routing::{delete, get, patch, post},
 };
-use tower_http::{services::ServeDir, set_header::SetResponseHeaderLayer};
+
+pub use web::serve_web;
 
 use crate::{error::json_errors, state::AppState, ws};
 
@@ -44,14 +45,4 @@ pub fn router(state: AppState) -> Router {
         .layer(DefaultBodyLimit::max(MAX_BODY))
         .layer(map_response(json_errors))
         .with_state(state)
-}
-
-/// Serve o client compilado em `dir` no que não é rota da API. O navegador sempre confere se
-/// mudou (304), porque o `index.html` não leva hash no nome.
-pub fn serve_web(router: Router, dir: &str) -> Router {
-    let files = Router::new().fallback_service(ServeDir::new(dir).precompressed_gzip());
-    router.fallback_service(files.layer(SetResponseHeaderLayer::overriding(
-        header::CACHE_CONTROL,
-        HeaderValue::from_static("no-cache"),
-    )))
 }

@@ -17,7 +17,7 @@ o áudio vai direto do client para o LiveKit. Veja o `Plano de MVP.md`.
 | `migrations/` | Migrations SQL, aplicadas automaticamente na subida do servidor | |
 | `docker-compose.yml` | Postgres 17 e LiveKit em modo dev | |
 
-O `src-tauri/` (casca desktop para Windows) entra na Fase 3.
+O `desktop/` (app nativo para Windows, em iced, com o SDK Rust do LiveKit) entra na Fase 4. O projeto é desktop first: a web fica congelada, só com correções.
 
 ## Rodando localmente
 

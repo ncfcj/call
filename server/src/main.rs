@@ -1,22 +1,41 @@
 use std::{net::SocketAddr, time::Duration};
 
 use anyhow::Context;
+use sentry::integrations::tracing::{ErrorLayer, LogLayer, SpanLayer};
 use sqlx::postgres::PgPoolOptions;
-use tower_http::trace::TraceLayer;
-use tracing_subscriber::EnvFilter;
+use tracing_subscriber::{EnvFilter, filter::LevelFilter, prelude::*};
 
-use call_server::{config::Config, retention, routes, state::AppState};
+use call_server::{config::Config, retention, routes, state::AppState, trace};
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt()
-        .with_env_filter(
+    // Sem SENTRY_DSN o Sentry fica desligado. O ambiente é SENTRY_ENVIRONMENT ou, sem ele,
+    // development (debug) ou production (release).
+    let _sentry = sentry::init(
+        sentry::ClientOptions::new()
+            // No Render, o commit do deploy; o Sentry liga cada erro à versão que o causou.
+            .maybe_release(
+                std::env::var("RENDER_GIT_COMMIT").ok().map(Into::into).or(sentry::release_name!()),
+            )
+            .traces_sample_rate(if cfg!(debug_assertions) { 1.0 } else { 0.1 }),
+    );
+    let json = std::env::var("LOG_FORMAT").is_ok_and(|format| format == "json");
+    tracing_subscriber::registry()
+        .with(
             EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| EnvFilter::new("call_server=debug,tower_http=info")),
         )
+        .with(json.then(|| tracing_subscriber::fmt::layer().json()))
+        .with((!json).then(tracing_subscriber::fmt::layer))
+        .with(SpanLayer::new().with_filter(LevelFilter::INFO))
+        .with(LogLayer::new().with_filter(LevelFilter::INFO))
+        .with(ErrorLayer::new().with_filter(LevelFilter::ERROR))
         .init();
+    // O Sentry começa antes do runtime, para as threads do tokio herdarem o cliente.
+    tokio::runtime::Builder::new_multi_thread().enable_all().build()?.block_on(serve())
+}
 
+async fn serve() -> anyhow::Result<()> {
     let config = Config::from_env()?;
 
     let db = PgPoolOptions::new()
@@ -43,9 +62,9 @@ async fn main() -> anyhow::Result<()> {
     state.signup_code = config.signup_code.clone();
     let mut app = routes::router(state);
     if let Some(dir) = &config.web_dir {
-        app = routes::serve_web(app, dir);
+        app = routes::serve_web(app, dir, &config.livekit.url)?;
     }
-    let app = app.layer(config.cors_layer()).layer(TraceLayer::new_for_http());
+    let app = app.layer(config.cors_layer()).layer(trace::layer());
 
     // Um listener por endereço, todos com o mesmo app (o mesmo estado e o mesmo hub).
     let mut servers = tokio::task::JoinSet::new();

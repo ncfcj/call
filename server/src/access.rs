@@ -52,6 +52,7 @@ pub async fn guild_member(db: &PgPool, guild: GuildId, user: UserId) -> AppResul
     .fetch_optional(db)
     .await?;
     let owner = owner.ok_or(AppError::NotFound)?;
+    tracing::Span::current().record("guild", tracing::field::display(guild));
     Ok(GuildAccess { guild_id: guild, owner_id: UserId(owner), user_id: user })
 }
 
@@ -105,6 +106,9 @@ pub async fn channel_member(
     .fetch_optional(db)
     .await?;
     let row = row.ok_or(AppError::NotFound)?;
+    tracing::Span::current()
+        .record("guild", tracing::field::display(row.channel.guild_id))
+        .record("channel", tracing::field::display(channel));
     let guild = GuildAccess {
         guild_id: GuildId(row.channel.guild_id),
         owner_id: UserId(row.owner_id),

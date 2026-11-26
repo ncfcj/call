@@ -21,6 +21,8 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.strip_prefix("Bearer "))
             .ok_or(AppError::Unauthorized)?;
-        state.jwt.verify(token).map(AuthUser).ok_or(AppError::Unauthorized)
+        let user = state.jwt.verify(token).ok_or(AppError::Unauthorized)?;
+        tracing::Span::current().record("user", tracing::field::display(user));
+        Ok(Self(user))
     }
 }

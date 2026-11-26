@@ -58,7 +58,8 @@ impl IntoResponse for AppError {
         let message = match &self {
             Self::Internal(err) => {
                 // O detalhe fica no log; o client recebe uma mensagem genérica.
-                tracing::error!(error = ?err, "erro interno");
+                // Como `dyn Error`, o Sentry agrupa pelo tipo do erro e mostra a mensagem.
+                tracing::error!(error = err.as_ref() as &dyn std::error::Error, "erro interno");
                 "erro interno do servidor".to_owned()
             }
             other => other.to_string(),
