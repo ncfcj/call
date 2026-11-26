@@ -21,7 +21,7 @@ base64 = "0.23"
 chrono = { workspace = true, features = ["clock"] }
 cookie = "0.18"
 dotenvy = "0.15"
-jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
+jsonwebtoken = { version = "12", default-features = false, features = ["rust_crypto"] }
 rand = "0.10"
 sentry = { version = "0.49.6", default-features = false, features = ["backtrace", "contexts", "panic", "logs", "reqwest", "rustls", "tracing"] }
 sha2 = "0.11"
