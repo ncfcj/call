@@ -264,7 +264,7 @@ Stack:
 
 Etapas (um commit e um teste funcional por etapa):
 
-- [ ] **4a. Esqueleto e login.** Janela iced, cadastro e login na API de produção ou local, sessão que sobrevive a fechar e abrir o app. Teste: abrir o app, entrar, fechar, abrir de novo e continuar logado
+- [x] **4a. Esqueleto e login.** Janela iced, cadastro e login na API de produção ou local, sessão que sobrevive a fechar e abrir o app. Teste: abrir o app, entrar, fechar, abrir de novo e continuar logado
 - [ ] **4b. Servidores, canais e chat.** Lista de servidores e canais, histórico com rolagem, envio, digitando e presença pelo WebSocket, com reconexão. Teste: conversar entre o app e um navegador na web
 - [ ] **4c. Voz.** Entrar e sair do canal de voz, mudo, ensurdecer, quem está falando e escolha de microfone e saída. Teste: chamada entre o app e a web, em redes diferentes
 - [ ] **4d. Instalador.** Instalador para Windows (MSI ou NSIS) com ícone e atalho. Teste: instalar numa máquina limpa, entrar e falar
