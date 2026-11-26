@@ -4,6 +4,10 @@
 //! O access token fica só na memória. O refresh token fica no cookie `HttpOnly` que o servidor
 //! define, e o JavaScript nunca o lê: por isso toda chamada vai com `credentials: include`.
 //! Quando a API responde 401, o cliente tenta um refresh e repete a chamada uma vez.
+//!
+//! Fora do navegador (o app desktop), o próprio cliente guarda os cookies, e
+//! [`ApiClient::refresh_cookie`] e [`ApiClient::restore_refresh_cookie`] levam o de refresh
+//! para fora e de volta, para a sessão sobreviver a fechar o app.
 
 #[cfg(target_arch = "wasm32")]
 pub mod ws;
@@ -43,12 +47,49 @@ pub struct ApiClient {
     base_url: String,
     http: reqwest::Client,
     token: Arc<Mutex<Option<String>>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    cookies: Arc<reqwest::cookie::Jar>,
 }
 
 impl ApiClient {
+    #[cfg(target_arch = "wasm32")]
     pub fn new(base_url: impl Into<String>) -> Self {
         let base_url = base_url.into().trim_end_matches('/').to_owned();
         Self { base_url, http: reqwest::Client::new(), token: Arc::default() }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(base_url: impl Into<String>) -> Self {
+        let base_url = base_url.into().trim_end_matches('/').to_owned();
+        let cookies = Arc::new(reqwest::cookie::Jar::default());
+        let http = reqwest::Client::builder()
+            .cookie_provider(cookies.clone())
+            .build()
+            .expect("cliente HTTP com a configuração padrão");
+        Self { base_url, http, token: Arc::default(), cookies }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn auth_url(&self) -> Option<reqwest::Url> {
+        format!("{}/auth/refresh", self.base_url).parse().ok()
+    }
+
+    /// O cookie de refresh atual (`refresh_token=...`), para guardar fora do app. `None` sem
+    /// sessão: o logout e um refresh recusado o apagam.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn refresh_cookie(&self) -> Option<String> {
+        use reqwest::cookie::CookieStore;
+        let value = self.cookies.cookies(&self.auth_url()?)?;
+        value.to_str().ok().map(str::to_owned)
+    }
+
+    /// Devolve ao cliente um cookie lido de [`Self::refresh_cookie`]; depois, chame
+    /// [`Self::refresh`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn restore_refresh_cookie(&self, cookie: &str) {
+        if let Some(url) = self.auth_url() {
+            self.cookies.add_cookie_str(&format!("{cookie}; Path=/auth"), &url);
+        }
     }
 
     pub fn base_url(&self) -> &str {

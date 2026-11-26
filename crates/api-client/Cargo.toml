@@ -14,6 +14,10 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
+# No app desktop: TLS próprio e o cookie de refresh guardado pelo cliente (no navegador, é o fetch).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+reqwest = { workspace = true, features = ["cookies", "rustls"] }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 futures = "0.3"
 gloo-net = { version = "0.8", default-features = false, features = ["websocket"] }

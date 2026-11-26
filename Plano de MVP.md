@@ -257,7 +257,7 @@ Objetivo: o app principal do Call, nativo, sem WebView, com consumo mínimo de C
 
 Stack:
 
-- **UI:** `iced` (MIT, arquitetura Elm, redesenha só quando o estado muda, GPU via `wgpu` com fallback em software). Visual do `DESIGN.md`.
+- **UI:** `iced` (MIT, arquitetura Elm, redesenha só quando o estado muda, GPU via `wgpu` com fallback em software). Mesmo visual da web; o visual muda só depois do MVP, e a Fase 4 foca na funcionalidade.
 - **Voz:** crate `livekit` (SDK Rust), que traz o libwebrtc nativo com o processamento de áudio dele (eco, ruído, ganho) e o Opus.
 - **Reaproveitado:** `proto`, `api-client` (precisa de transporte nativo para o WebSocket) e `core` (estado e regras, sem UI).
 - **Sessão:** o refresh token continua no cookie, guardado pelo próprio client (cookie jar do `reqwest`) e salvo no Cofre de Credenciais do Windows, não em arquivo.

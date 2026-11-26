@@ -1,0 +1,20 @@
+[package]
+name = "call-desktop"
+description = "App desktop nativo do Call (iced), sem WebView."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+api-client.workspace = true
+proto.workspace = true
+iced = { version = "0.14", features = ["tokio"] }
+
+# A sessão fica no Cofre de Credenciais do Windows.
+[target.'cfg(windows)'.dependencies]
+keyring = "4"
+
+[lints]
+workspace = true

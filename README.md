@@ -9,15 +9,16 @@ o áudio vai direto do client para o LiveKit. Veja o `Plano de MVP.md`.
 | Caminho | Conteúdo | Alvo |
 | --- | --- | --- |
 | `crates/proto` | Contrato REST e eventos WS, compartilhado entre servidor e client | Nativo e wasm32 |
-| `crates/api-client` | Chamadas REST (`reqwest` sobre o `fetch` do navegador) | wasm32 |
-| `crates/core` | Estado do client sem dependência de UI | wasm32 |
+| `crates/api-client` | Chamadas REST (`reqwest`; no navegador, sobre o `fetch`) | Nativo e wasm32 |
+| `crates/core` | Estado do client sem dependência de UI | Nativo e wasm32 |
 | `crates/voice` | Ponte `wasm-bindgen` com o `livekit-client` (Fase 2) | wasm32 |
 | `server/` | Binário `call-server` (axum + tokio + sqlx) | Nativo |
-| `web/` | UI Leptos (CSR) e build Trunk | wasm32 |
+| `desktop/` | App desktop nativo (iced), o client principal | Windows |
+| `web/` | UI Leptos (CSR) e build Trunk, congelada (só correções) | wasm32 |
 | `migrations/` | Migrations SQL, aplicadas automaticamente na subida do servidor | |
 | `docker-compose.yml` | Postgres 17 e LiveKit em modo dev | |
 
-O `desktop/` (app nativo para Windows, em iced, com o SDK Rust do LiveKit) entra na Fase 4. O projeto é desktop first: a web fica congelada, só com correções.
+O projeto é desktop first: o `desktop/` é o client principal (Fase 4), e a web fica congelada.
 
 ## Rodando localmente
 
@@ -34,7 +35,16 @@ cargo run -p call-server
 
 Teste: `curl http://127.0.0.1:3000/health` deve responder `{"status":"ok",...,"database":true}`.
 
-Client, em outro terminal:
+App desktop, em outro terminal (sem `CALL_API_URL`, ele usa a API de produção):
+
+```powershell
+$env:CALL_API_URL="http://127.0.0.1:3000"; cargo run -p call-desktop
+```
+
+A sessão fica no Cofre de Credenciais do Windows (uma entrada por API), então o app abre já
+logado. O botão Sair apaga a entrada.
+
+Client web, em outro terminal:
 
 ```powershell
 cd web

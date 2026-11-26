@@ -30,6 +30,8 @@ struct Fake {
     refresh_status: AtomicU16,
     /// `Authorization` de cada `GET /users/@me/guilds`.
     seen_auth: Mutex<Vec<Option<String>>>,
+    /// `Cookie` de cada refresh.
+    seen_cookie: Mutex<Vec<Option<String>>>,
 }
 
 type Shared = Arc<Fake>;
@@ -45,13 +47,16 @@ fn unauthorized() -> Response {
         .into_response()
 }
 
-async fn login() -> Json<serde_json::Value> {
+async fn login() -> Response {
     // "velho" faz o papel de um access token já vencido.
-    Json(auth_body("velho"))
+    let cookie = "refresh_token=r1; Path=/auth; HttpOnly; SameSite=Lax; Max-Age=3600";
+    ([(header::SET_COOKIE, cookie)], Json(auth_body("velho"))).into_response()
 }
 
-async fn refresh(State(fake): State<Shared>) -> Response {
+async fn refresh(State(fake): State<Shared>, headers: HeaderMap) -> Response {
     fake.refreshes.fetch_add(1, Ordering::SeqCst);
+    let cookie = headers.get(header::COOKIE).map(|v| v.to_str().unwrap().to_owned());
+    fake.seen_cookie.lock().unwrap().push(cookie);
     match fake.refresh_status.load(Ordering::SeqCst) {
         0 | 200 => Json(auth_body("novo")).into_response(),
         401 => StatusCode::UNAUTHORIZED.into_response(),
@@ -81,6 +86,21 @@ async fn start() -> (ApiClient, Shared) {
     let addr: SocketAddr = listener.local_addr().unwrap();
     tokio::spawn(axum::serve(listener, app).into_future());
     (ApiClient::new(format!("http://{addr}")), fake)
+}
+
+#[tokio::test]
+async fn refresh_cookie_survives_a_new_client() {
+    let (api, fake) = start().await;
+    assert_eq!(api.refresh_cookie(), None, "sem sessão, sem cookie");
+    sign_in(&api).await;
+    let saved = api.refresh_cookie().unwrap();
+    assert_eq!(saved, "refresh_token=r1");
+
+    // Como abrir o app de novo: um cliente novo com o cookie salvo.
+    let reopened = ApiClient::new(api.base_url());
+    reopened.restore_refresh_cookie(&saved);
+    assert_eq!(reopened.refresh().await.unwrap().username, "ana");
+    assert_eq!(fake.seen_cookie.lock().unwrap().clone(), [Some(saved)]);
 }
 
 async fn sign_in(api: &ApiClient) {
