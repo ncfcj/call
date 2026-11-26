@@ -16,7 +16,8 @@ if ($health.Status -ne 200) { throw "API fora do ar em $Api" }
 Write-Host "Compilando o app (a primeira vez demora)..."
 cargo build -q -p call-desktop
 $env:CALL_API_URL = $Api
-$app = Start-Process cargo -ArgumentList "run", "-q", "-p", "call-desktop" -PassThru -NoNewWindow
+# Noutra janela (minimizada): um Ctrl+C no robô não fecha o app junto.
+$app = Start-Process cargo -ArgumentList "run", "-q", "-p", "call-desktop" -PassThru -WindowStyle Minimized
 
 Write-Host ""
 Write-Host "1. No app, entre e crie um servidor pelo '+' da barra da esquerda." -ForegroundColor Cyan
