@@ -16,8 +16,10 @@ if ($health.Status -ne 200) { throw "API fora do ar em $Api" }
 Write-Host "Compilando o app (a primeira vez demora)..."
 cargo build -q -p call-desktop
 $env:CALL_API_URL = $Api
-# Noutra janela (minimizada): um Ctrl+C no robô não fecha o app junto.
-$app = Start-Process cargo -ArgumentList "run", "-q", "-p", "call-desktop" -PassThru -WindowStyle Minimized
+# O exe direto, noutra janela: um Ctrl+C no robô não fecha o app junto.
+$exe = Join-Path (cargo metadata -q --format-version 1 --no-deps | ConvertFrom-Json).target_directory "debug\call-desktop.exe"
+$app = Start-Process $exe -PassThru
+Write-Host "O app abriu na janela 'Call' (veja na barra de tarefas se ficou atrás desta)."
 
 Write-Host ""
 Write-Host "1. No app, entre e crie um servidor pelo '+' da barra da esquerda." -ForegroundColor Cyan
@@ -37,14 +39,14 @@ $itens = @(
     "o # geral ganhou o '•' de não lido enquanto você estava no outro canal"
 )
 foreach ($item in $itens) {
-    $resposta = Read-Host "Confere: $item? (s/n)"
+    $resposta = Read-Host "Confere: $($item)? (s/n)"
     Test-Step $item ($resposta -eq "s")
 }
 
 Write-Host ""
 Write-Host "4. Feche o app. Ele abre de novo: deve voltar no mesmo servidor, com o histórico." -ForegroundColor Cyan
 $app.WaitForExit()
-cargo run -q -p call-desktop
+Start-Process $exe -Wait
 $resposta = Read-Host "Voltou no mesmo servidor, com o histórico? (s/n)"
 Test-Step "a sessão e o histórico voltam ao abrir o app" ($resposta -eq "s")
 
