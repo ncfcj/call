@@ -46,7 +46,9 @@ logado. O botão Sair apaga a entrada.
 
 Testes do app: `scripts\teste-desktop.ps1` (login e sessão), `scripts\teste-desktop-chat.ps1`
 (servidores e chat, com o robô do `teste-client.ps1` conversando com você) e
-`scripts\teste-desktop-voz.ps1` (chamada de voz com a web, em outra rede).
+`scripts\teste-desktop-voz.ps1` (chamada de voz com a web, em outra rede) e
+`scripts\teste-desktop-ptt.ps1` (Push-to-Talk: no diálogo Áudio, uma tecla global que abre o
+microfone só enquanto está apertada).
 
 Instalador do Windows (NSIS, por usuário, sem pedir administrador), com o
 [cargo-packager](https://github.com/crabnebula-dev/cargo-packager):

@@ -28,7 +28,9 @@ use proto::{
 };
 
 use crate::{
-    gateway, theme,
+    gateway,
+    ptt::{self, Ptt},
+    theme,
     voice::{self, Call, Device},
 };
 
@@ -85,6 +87,12 @@ pub enum Msg {
     AudioSettings(bool),
     Input(Device),
     Output(Device),
+    /// Esperando a próxima tecla para o Push-to-Talk.
+    PttCapture,
+    PttKey(iced::keyboard::Event),
+    PttOff,
+    /// A tecla do Push-to-Talk foi apertada (`true`) ou solta.
+    PttHeld(bool),
     /// Uma tarefa sem resposta terminou (ex.: fechar a sala).
     Done,
     /// Tratado pelo `main`, que é quem guarda a sessão.
@@ -136,6 +144,9 @@ pub struct Chat {
     /// Quem está na voz em cada servidor, segundo o servidor. É o que mostra quem está num
     /// canal para quem não está nele.
     voice_states: HashMap<GuildId, HashMap<UserId, VoiceState>>,
+    /// Com o Push-to-Talk ligado, o microfone só abre com a tecla apertada.
+    ptt: Option<Ptt>,
+    capturing_key: bool,
 }
 
 /// O aviso de digitação vale 8 s nos outros clients; reenvia um pouco antes.
@@ -172,6 +183,8 @@ impl Chat {
             prefs: voice::Prefs::default(),
             audio_dialog: None,
             voice_states: HashMap::new(),
+            ptt: None,
+            capturing_key: false,
         };
         let task = chat.call(|api| async move { api.my_guilds().await }, Msg::Guilds);
         (chat, task)
@@ -433,6 +446,31 @@ impl Chat {
                 self.prefs.output = Some(device.id).filter(|id| !id.is_empty());
                 self.apply_devices();
             }
+            Msg::PttCapture => self.capturing_key = true,
+            Msg::PttKey(event) => {
+                if let Some(code) = ptt::code_of(&event).filter(|_| self.capturing_key) {
+                    self.capturing_key = false;
+                    if code != global_hotkey::hotkey::Code::Escape {
+                        // Solta a tecla antiga antes: pode ser a mesma.
+                        self.ptt = None;
+                        match Ptt::new(code) {
+                            Ok(ptt) => self.ptt = Some(ptt),
+                            Err(err) => self.notify(format!("Push-to-Talk: {err}.")),
+                        }
+                        self.apply_mic();
+                    }
+                }
+            }
+            Msg::PttOff => {
+                self.ptt = None;
+                self.apply_mic();
+            }
+            Msg::PttHeld(held) => {
+                if let Some(ptt) = &mut self.ptt {
+                    ptt.held = held;
+                    self.apply_mic();
+                }
+            }
             Msg::Done | Msg::Logout => {}
         }
         Task::none()
@@ -448,8 +486,7 @@ impl Chat {
         self.voice_session += 1;
         let session = self.voice_session;
         self.call = Some(Call::new(guild, channel, session));
-        let (api, mic_open, prefs) =
-            (self.api.clone(), self.controls.mic_open(), self.prefs.clone());
+        let (api, mic_open, prefs) = (self.api.clone(), self.mic_live(), self.prefs.clone());
         let join = Task::perform(voice::connect(api, channel, mic_open, prefs), move |res| {
             Msg::VoiceJoined(session, res)
         });
@@ -480,8 +517,18 @@ impl Chat {
 
     fn apply_controls(&mut self) {
         self.send_voice_state();
+        self.apply_mic();
+    }
+
+    /// O microfone abre sem mute e sem deaf e, com o Push-to-Talk, só com a tecla apertada.
+    fn mic_live(&self) -> bool {
+        self.controls.mic_open() && self.ptt.as_ref().is_none_or(|p| p.held)
+    }
+
+    fn apply_mic(&mut self) {
+        let open = self.mic_live();
         if let Some(call) = &mut self.call {
-            call.set_mic(self.controls.mic_open());
+            call.set_mic(open);
             call.refresh(self.controls.deafened);
         }
     }
@@ -493,10 +540,19 @@ impl Chat {
     }
 
     pub fn voice_subscription(&self) -> iced::Subscription<Msg> {
-        match &self.call {
+        let call = match &self.call {
             Some(call) => call.subscription().with(call.session).map(|(s, e)| Msg::Voice(s, e)),
             None => iced::Subscription::none(),
-        }
+        };
+        let held = match &self.ptt {
+            Some(_) => ptt::events().map(Msg::PttHeld),
+            None => iced::Subscription::none(),
+        };
+        let capture = match self.capturing_key {
+            true => iced::keyboard::listen().map(Msg::PttKey),
+            false => iced::Subscription::none(),
+        };
+        iced::Subscription::batch([call, held, capture])
     }
 
     // --- WebSocket --------------------------------------------------------------------------
@@ -940,7 +996,7 @@ impl Chat {
                 .iter()
                 .map(|p| {
                     let (muted, deafened) = if p.local {
-                        (!self.controls.mic_open(), self.controls.deafened)
+                        (!self.mic_live(), self.controls.deafened)
                     } else {
                         let (m, d) = flags(&p.identity).unwrap_or((false, false));
                         (m || !p.mic, d)
@@ -1018,6 +1074,30 @@ impl Chat {
                 pick_list(outputs, chosen(outputs, &self.prefs.output), Msg::Output)
                     .width(Length::Fill),
                 text("Vale na hora, inclusive durante uma chamada.").size(12).color(theme::MUTED),
+                text("Apertar para falar").color(theme::MUTED),
+                row![
+                    text(match &self.ptt {
+                        Some(ptt) => format!("Tecla: {}", ptt.label),
+                        None => "Desligado".to_owned(),
+                    })
+                    .width(Length::Fill),
+                    button(if self.capturing_key {
+                        "Aperte uma tecla..."
+                    } else {
+                        "Escolher tecla"
+                    })
+                    .on_press(Msg::PttCapture),
+                    button("Desligar").on_press_maybe(self.ptt.is_some().then_some(Msg::PttOff)),
+                ]
+                .spacing(8)
+                .align_y(iced::Alignment::Center),
+                text(
+                    "O microfone só abre enquanto a tecla está apertada, mesmo com o Call em \
+                     segundo plano. Enquanto isso, a tecla não chega aos outros programas. Esc \
+                     cancela a escolha."
+                )
+                .size(12)
+                .color(theme::MUTED),
                 button("Fechar").on_press(Msg::AudioSettings(false)),
             ]
             .spacing(8),

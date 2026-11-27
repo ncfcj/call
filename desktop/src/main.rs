@@ -5,6 +5,7 @@
 
 mod chat;
 mod gateway;
+mod ptt;
 mod session;
 mod theme;
 mod update;
