@@ -12,6 +12,7 @@ api-client.workspace = true
 proto.workspace = true
 call-core.workspace = true
 chrono = { workspace = true, features = ["clock"] }
+log = "0.4"
 tokio = { version = "1", features = ["macros", "time"] }
 iced = { version = "0.14", features = ["tokio"] }
 # Voz: o libwebrtc nativo, com o microfone e a saída pelo WASAPI e o processamento de áudio dele.

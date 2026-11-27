@@ -21,12 +21,34 @@ use proto::{LoginRequest, RegisterRequest, User};
 const DEFAULT_API_URL: &str = "https://call-70hr.onrender.com";
 
 fn main() -> iced::Result {
+    log::set_logger(&Logger).ok();
+    log::set_max_level(log::LevelFilter::Info);
     iced::application(boot, update, view)
         .title("Call")
         .theme(|_: &State| theme::theme())
         .subscription(subscription)
         .window_size(Size::new(1100.0, 720.0))
         .run()
+}
+
+/// Avisos e erros no console (o build de debug tem um): o que o LiveKit conta ao conectar.
+struct Logger;
+
+impl log::Log for Logger {
+    fn enabled(&self, meta: &log::Metadata<'_>) -> bool {
+        meta.level() <= log::Level::Warn || meta.target().starts_with("call_desktop")
+    }
+
+    fn log(&self, record: &log::Record<'_>) {
+        if self.enabled(record.metadata()) {
+            #[allow(clippy::print_stderr, reason = "é o destino do log")]
+            {
+                eprintln!("[{}] {}: {}", record.level(), record.target(), record.args());
+            }
+        }
+    }
+
+    fn flush(&self) {}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -241,12 +241,30 @@ pub async fn connect(
     if !mic_open {
         mic.mute();
     }
-    let publish = TrackPublishOptions { source: TrackSource::Microphone, ..Default::default() };
-    let mut options = RoomOptions::default();
-    options.publish_tracks = vec![(LocalTrack::Audio(mic.clone()), publish)];
+    log::info!("voz: entrando na sala em {}", token.url);
     let (room, events) =
-        Room::connect(&token.url, &token.token, options).await.map_err(|err| err.to_string())?;
+        timeout(Box::pin(Room::connect(&token.url, &token.token, RoomOptions::default())))
+            .await?
+            .map_err(|err| err.to_string())?;
+    log::info!("voz: na sala; publicando o microfone");
+    let publish = TrackPublishOptions { source: TrackSource::Microphone, ..Default::default() };
+    let published =
+        timeout(room.local_participant().publish_track(LocalTrack::Audio(mic.clone()), publish))
+            .await
+            .and_then(|res| res.map_err(|err| err.to_string()));
+    if let Err(err) = published {
+        let _ = room.close().await;
+        return Err(format!("o microfone não abriu ({err})"));
+    }
+    log::info!("voz: conectado");
     Ok(Handle { room: Arc::new(room), mic, audio, events: Arc::new(Mutex::new(Some(events))) })
+}
+
+/// Sem resposta do LiveKit em 20 s, desiste em vez de ficar conectando para sempre.
+async fn timeout<T>(fut: impl Future<Output = T>) -> Result<T, String> {
+    tokio::time::timeout(std::time::Duration::from_secs(20), fut)
+        .await
+        .map_err(|_| "o servidor de voz não respondeu".to_owned())
 }
 
 /// Aplica a escolha. Um dispositivo que sumiu (fone desconectado) fica no padrão do sistema.
