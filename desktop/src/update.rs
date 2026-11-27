@@ -1,6 +1,7 @@
-//! Atualização automática: ao abrir, o app confere se há uma release nova no GitHub. Se houver,
-//! mostra um aviso; "Atualizar" baixa o instalador, confere a assinatura (minisign) com a chave
-//! pública abaixo e o roda em modo passivo, que fecha o app, instala e abre a versão nova.
+//! Atualização automática: o app confere se há uma release nova no GitHub ao abrir e a cada 6 h.
+//! Na abertura (fora de uma chamada) instala sozinho; depois, mostra um aviso com "Atualizar".
+//! Instalar baixa o instalador, confere a assinatura (minisign) com a chave pública abaixo e o
+//! roda em modo passivo, que fecha o app, instala e abre a versão nova.
 //!
 //! A release publica um `latest.json` (ver `.github/workflows/release.yml`) com a versão, o link
 //! do instalador e a assinatura dele.

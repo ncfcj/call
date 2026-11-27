@@ -111,7 +111,10 @@ enum Message {
     LoggedOut,
     /// Mensagem do chat da sessão `epoch`; as de uma sessão anterior são descartadas.
     Chat(u64, chat::Msg),
-    UpdateFound(Option<Box<cargo_packager_updater::Update>>),
+    /// Hora de procurar uma versão nova (a cada 6 h, com o app aberto).
+    CheckUpdate,
+    /// Resultado da procura. `true` na abertura: aí instala sem perguntar.
+    UpdateFound(Option<Box<cargo_packager_updater::Update>>, bool),
     Install,
     /// Só chega se a instalação falhar: dando certo, o app fecha para o instalador.
     Installed(Result<(), String>),
@@ -151,7 +154,8 @@ fn boot() -> (State, Task<Message>) {
         }
         None => Task::done(Message::Booted(None, None)),
     };
-    let check = Task::perform(update::check(), |found| Message::UpdateFound(found.map(Box::new)));
+    let check =
+        Task::perform(update::check(), |found| Message::UpdateFound(found.map(Box::new), true));
     let state =
         State { api, screen: Screen::Booting, epoch: 0, saved, update: None, updating: None };
     (state, Task::batch([task, check]))
@@ -191,7 +195,25 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             return Task::batch([hang_up, logout]);
         }
         Message::LoggedOut => sync_session(state),
-        Message::UpdateFound(found) => state.update = found,
+        Message::CheckUpdate => {
+            if state.updating.is_none() {
+                return Task::perform(update::check(), |found| {
+                    Message::UpdateFound(found.map(Box::new), false)
+                });
+            }
+        }
+        Message::UpdateFound(found, at_open) => {
+            // Sem resposta (ex.: sem rede), não apaga um aviso que já está na tela.
+            if found.is_some() {
+                state.update = found;
+            }
+            // Na abertura instala sozinho, se não estiver numa chamada; depois, só avisa, para
+            // não fechar o app no meio de uma conversa.
+            let in_call = matches!(&state.screen, Screen::Home(chat) if chat.in_call());
+            if at_open && !in_call && state.update.is_some() {
+                return Task::done(Message::Install);
+            }
+        }
         Message::Install => {
             if let Some(found) = state.update.clone() {
                 state.updating = Some(Ok(()));
@@ -242,15 +264,20 @@ fn leave_voice(state: &mut State) -> Task<Message> {
 
 /// O WebSocket, a voz e o relógio do chat, só com a sessão aberta.
 fn subscription(state: &State) -> Subscription<Message> {
-    let Screen::Home(chat) = &state.screen else { return Subscription::none() };
-    Subscription::batch([
+    let check = iced::time::every(UPDATE_EVERY).map(|_| Message::CheckUpdate);
+    let Screen::Home(chat) = &state.screen else { return check };
+    let home = Subscription::batch([
         gateway::subscription(&state.api, state.epoch).map(chat::Msg::Gateway),
         chat.voice_subscription(),
         iced::time::every(std::time::Duration::from_secs(1)).map(|_| chat::Msg::Tick),
     ])
     .with(state.epoch)
-    .map(|(epoch, msg)| Message::Chat(epoch, msg))
+    .map(|(epoch, msg)| Message::Chat(epoch, msg));
+    Subscription::batch([check, home])
 }
+
+/// De quanto em quanto tempo, com o app aberto, procura uma versão nova.
+const UPDATE_EVERY: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
 
 /// O cookie muda a cada refresh e some no logout; o cofre acompanha.
 fn sync_session(state: &mut State) {
@@ -324,7 +351,7 @@ fn update_bar<'a>(
 ) -> Element<'a, Message> {
     let action: Element<'a, Message> = match updating {
         None => button("Atualizar agora").on_press(Message::Install).into(),
-        Some(Ok(())) => text("Baixando e instalando...").into(),
+        Some(Ok(())) => text("Baixando e instalando; o Call abre de novo sozinho...").into(),
         Some(Err(err)) => row![
             text!("A atualização falhou: {err}").color(theme::DANGER),
             button("Tentar de novo").on_press(Message::Install),

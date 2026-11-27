@@ -456,6 +456,10 @@ impl Chat {
         Task::batch([leave, join])
     }
 
+    pub fn in_call(&self) -> bool {
+        self.call.is_some()
+    }
+
     /// Sai da chamada, se estiver numa. Também chamado pelo `main` no logout.
     pub fn leave_voice(&mut self) -> Task<Msg> {
         let Some(call) = self.call.take() else { return Task::none() };

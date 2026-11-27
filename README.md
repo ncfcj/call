@@ -58,8 +58,9 @@ cargo packager --release -p call-desktop   # gera o ...-setup.exe no target, em 
 
 Teste: `scripts\teste-instalador.ps1`. Uma release sai ao enviar uma tag `vX.Y.Z` igual à versão do
 `Cargo.toml` (`.github/workflows/release.yml`). O app instalado confere a release mais nova ao
-abrir e, se houver, oferece atualizar: baixa o instalador, confere a assinatura com a chave
-pública de `desktop/src/update.rs` e o roda.
+abrir e a cada 6 h. Na abertura, fora de uma chamada, atualiza sozinho; depois, mostra um aviso
+com o botão de atualizar. Atualizar baixa o instalador, confere a assinatura com a chave pública
+de `desktop/src/update.rs` e o roda.
 
 Client web, em outro terminal:
 
