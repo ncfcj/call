@@ -3,3 +3,6 @@
 .env
 *.log
 /mutants.out*
+
+# Instaladores gerados pelo cargo packager.
+/dist/

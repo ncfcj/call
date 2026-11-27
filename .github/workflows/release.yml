@@ -1,0 +1,53 @@
+# Release do app desktop: numa tag `vX.Y.Z`, gera o instalador do Windows, assina para o
+# atualizador e publica numa release do GitHub com o `latest.json` que o app consulta.
+#
+# A versão da tag precisa ser a do `[workspace.package]` do Cargo.toml.
+# Segredos: UPDATER_PRIVATE_KEY e UPDATER_PRIVATE_KEY_PASSWORD (de `cargo packager signer generate`).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: A tag bate com a versão do Cargo.toml
+        shell: pwsh
+        run: |
+          $versao = (cargo metadata --format-version 1 --no-deps | ConvertFrom-Json).packages |
+            Where-Object name -eq "call-desktop" | Select-Object -ExpandProperty version
+          if ("v$versao" -ne "${{ github.ref_name }}") { throw "tag ${{ github.ref_name }}, Cargo.toml v$versao" }
+      - run: cargo install cargo-packager --locked --version 0.11.8
+      - name: Instalador assinado
+        env:
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY: ${{ secrets.UPDATER_PRIVATE_KEY }}
+          CARGO_PACKAGER_SIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.UPDATER_PRIVATE_KEY_PASSWORD }}
+        run: cargo packager --release -p call-desktop
+      - name: latest.json e release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $setup = Get-ChildItem dist -Recurse -Filter "*-setup.exe" | Select-Object -First 1
+          $sig = Get-Content "$($setup.FullName).sig" -Raw
+          $nome = $setup.Name -replace ' ', '.'
+          Copy-Item $setup.FullName "dist/$nome"
+          @{
+            version  = $tag
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            url      = "https://github.com/${{ github.repository }}/releases/download/$tag/$nome"
+            signature = $sig.Trim()
+            format   = "nsis"
+          } | ConvertTo-Json | Set-Content dist/latest.json -Encoding utf8NoBOM
+          gh release create $tag "dist/$nome" dist/latest.json --title "Call $tag" --generate-notes

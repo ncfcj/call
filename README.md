@@ -48,6 +48,19 @@ Testes do app: `scripts\teste-desktop.ps1` (login e sessão), `scripts\teste-des
 (servidores e chat, com o robô do `teste-client.ps1` conversando com você) e
 `scripts\teste-desktop-voz.ps1` (chamada de voz com a web, em outra rede).
 
+Instalador do Windows (NSIS, por usuário, sem pedir administrador), com o
+[cargo-packager](https://github.com/crabnebula-dev/cargo-packager):
+
+```powershell
+cargo install cargo-packager --locked
+cargo packager --release -p call-desktop   # gera dist\...-setup.exe
+```
+
+Teste: `scripts\teste-instalador.ps1`. Uma release sai ao enviar uma tag `vX.Y.Z` igual à versão do
+`Cargo.toml` (`.github/workflows/release.yml`). O app instalado confere a release mais nova ao
+abrir e, se houver, oferece atualizar: baixa o instalador, confere a assinatura com a chave
+pública de `desktop/src/update.rs` e o roda.
+
 Client web, em outro terminal:
 
 ```powershell

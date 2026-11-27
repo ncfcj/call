@@ -7,6 +7,7 @@ mod chat;
 mod gateway;
 mod session;
 mod theme;
+mod update;
 mod voice;
 
 use api_client::{ApiClient, ApiError};
@@ -29,7 +30,16 @@ fn main() -> iced::Result {
         .title("Call")
         .theme(|_: &State| theme::theme())
         .subscription(subscription)
-        .window_size(Size::new(1100.0, 720.0))
+        .window(iced::window::Settings {
+            size: Size::new(1100.0, 720.0),
+            icon: iced::window::icon::from_rgba(
+                include_bytes!("../assets/icon-64.rgba").to_vec(),
+                64,
+                64,
+            )
+            .ok(),
+            ..Default::default()
+        })
         .run()
 }
 
@@ -101,6 +111,10 @@ enum Message {
     LoggedOut,
     /// Mensagem do chat da sessão `epoch`; as de uma sessão anterior são descartadas.
     Chat(u64, chat::Msg),
+    UpdateFound(Option<Box<cargo_packager_updater::Update>>),
+    Install,
+    /// Só chega se a instalação falhar: dando certo, o app fecha para o instalador.
+    Installed(Result<(), String>),
 }
 
 struct State {
@@ -110,6 +124,9 @@ struct State {
     epoch: u64,
     /// O cookie que está no cofre, para só regravar quando o refresh o trocar.
     saved: Option<String>,
+    /// Release nova, se houver, e o estado da instalação dela.
+    update: Option<Box<cargo_packager_updater::Update>>,
+    updating: Option<Result<(), String>>,
 }
 
 fn boot() -> (State, Task<Message>) {
@@ -134,7 +151,10 @@ fn boot() -> (State, Task<Message>) {
         }
         None => Task::done(Message::Booted(None, None)),
     };
-    (State { api, screen: Screen::Booting, epoch: 0, saved }, task)
+    let check = Task::perform(update::check(), |found| Message::UpdateFound(found.map(Box::new)));
+    let state =
+        State { api, screen: Screen::Booting, epoch: 0, saved, update: None, updating: None };
+    (state, Task::batch([task, check]))
 }
 
 fn update(state: &mut State, message: Message) -> Task<Message> {
@@ -171,6 +191,17 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             return Task::batch([hang_up, logout]);
         }
         Message::LoggedOut => sync_session(state),
+        Message::UpdateFound(found) => state.update = found,
+        Message::Install => {
+            if let Some(found) = state.update.clone() {
+                state.updating = Some(Ok(()));
+                // Sai da chamada antes: o instalador fecha o app.
+                let hang_up = leave_voice(state);
+                let install = Task::perform(update::install(*found), Message::Installed);
+                return Task::batch([hang_up, install]);
+            }
+        }
+        Message::Installed(result) => state.updating = Some(result),
         Message::Chat(epoch, msg) => {
             let Screen::Home(chat) = &mut state.screen else { return Task::none() };
             if epoch != state.epoch {
@@ -271,14 +302,51 @@ fn authed(result: Result<User, ApiError>) -> Message {
 
 fn view(state: &State) -> Element<'_, Message> {
     let content = match &state.screen {
-        Screen::Booting => text("Conectando ao servidor...").color(theme::MUTED).into(),
-        Screen::Auth(auth) => auth_view(auth),
+        Screen::Booting => container(text("Conectando ao servidor...").color(theme::MUTED))
+            .center(Length::Fill)
+            .into(),
+        Screen::Auth(auth) => container(auth_view(auth)).center(Length::Fill).into(),
         Screen::Home(chat) => {
             let epoch = state.epoch;
-            return chat.view().map(move |msg| Message::Chat(epoch, msg));
+            chat.view().map(move |msg| Message::Chat(epoch, msg))
         }
     };
-    container(content).center(Length::Fill).into()
+    match &state.update {
+        Some(found) => column![update_bar(found, state.updating.as_ref()), content].into(),
+        None => content,
+    }
+}
+
+/// Faixa no topo quando há uma versão nova.
+fn update_bar<'a>(
+    found: &'a cargo_packager_updater::Update,
+    updating: Option<&'a Result<(), String>>,
+) -> Element<'a, Message> {
+    let action: Element<'a, Message> = match updating {
+        None => button("Atualizar agora").on_press(Message::Install).into(),
+        Some(Ok(())) => text("Baixando e instalando...").into(),
+        Some(Err(err)) => row![
+            text!("A atualização falhou: {err}").color(theme::DANGER),
+            button("Tentar de novo").on_press(Message::Install),
+        ]
+        .spacing(8)
+        .into(),
+    };
+    container(
+        row![
+            text!("A versão {} do Call está disponível.", found.version).width(Length::Fill),
+            action
+        ]
+        .spacing(12)
+        .align_y(iced::Alignment::Center),
+    )
+    .padding([6, 12])
+    .width(Length::Fill)
+    .style(|_| container::Style {
+        background: Some(theme::SURFACE_CARD.into()),
+        ..container::Style::default()
+    })
+    .into()
 }
 
 fn auth_view(auth: &Auth) -> Element<'_, Message> {
