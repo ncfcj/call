@@ -23,6 +23,8 @@ const DEFAULT_API_URL: &str = "https://call-70hr.onrender.com";
 fn main() -> iced::Result {
     log::set_logger(&Logger).ok();
     log::set_max_level(log::LevelFilter::Info);
+    // Sem isso, o rustls entra em pânico ao abrir a primeira conexão TLS do LiveKit.
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
     iced::application(boot, update, view)
         .title("Call")
         .theme(|_: &State| theme::theme())

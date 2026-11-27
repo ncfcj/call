@@ -729,6 +729,7 @@ dependencies = [
  "livekit",
  "log",
  "proto",
+ "rustls",
  "tokio",
 ]
 
