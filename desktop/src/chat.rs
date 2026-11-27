@@ -385,6 +385,8 @@ impl Chat {
                     (Some(call), Ok(handle)) => {
                         call.connected(handle, self.controls.deafened);
                         self.send_voice_state();
+                        // O mute ou a tecla podem ter mudado enquanto conectava.
+                        self.apply_mic();
                     }
                     (Some(_), Err(err)) => {
                         self.call = None;

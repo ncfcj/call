@@ -63,8 +63,9 @@ pub struct Prefs {
 #[derive(Clone)]
 pub struct Handle {
     room: Arc<Room>,
-    mic: LocalAudioTrack,
     audio: PlatformAudio,
+    /// Se o microfone saiu aberto da entrada.
+    mic_open: bool,
     /// Os eventos da sala, até a subscription pegá-los.
     events: Arc<Mutex<Option<UnboundedReceiver<RoomEvent>>>>,
 }
@@ -104,6 +105,7 @@ pub struct Call {
     /// Muda a cada entrada; eventos e respostas de uma sala antiga são ignorados.
     pub session: u64,
     handle: Option<Handle>,
+    mic_open: bool,
 }
 
 impl Call {
@@ -116,10 +118,12 @@ impl Call {
             speaking: HashSet::new(),
             session,
             handle: None,
+            mic_open: false,
         }
     }
 
     pub fn connected(&mut self, handle: Handle, deafened: bool) {
+        self.mic_open = handle.mic_open;
         self.handle = Some(handle);
         self.status = Status::Connected;
         self.refresh(deafened);
@@ -133,7 +137,7 @@ impl Call {
             identity: local.identity().to_string(),
             name: local.name(),
             local: true,
-            mic: !handle.mic.is_muted(),
+            mic: self.mic_open,
         }];
         for remote in handle.room.remote_participants().values() {
             let mut mic = false;
@@ -157,9 +161,18 @@ impl Call {
         self.participants = list;
     }
 
-    pub fn set_mic(&self, open: bool) {
-        if let Some(handle) = &self.handle {
-            if open { handle.mic.unmute() } else { handle.mic.mute() }
+    /// Abre ou fecha o microfone parando a captura, sem mutar a faixa: mutar e desmutar a faixa
+    /// deixa o áudio chiando no libwebrtc 0.12 (issue 04). Os outros veem o mute pelo servidor.
+    pub fn set_mic(&mut self, open: bool) {
+        let Some(handle) = &self.handle else { return };
+        if self.mic_open == open {
+            return;
+        }
+        let done =
+            if open { handle.audio.start_recording() } else { handle.audio.stop_recording() };
+        match done {
+            Ok(()) => self.mic_open = open,
+            Err(err) => log::warn!("voz: o microfone não mudou ({err})"),
         }
     }
 
@@ -256,8 +269,16 @@ pub async fn connect(
         let _ = room.close().await;
         return Err(format!("o microfone não abriu ({err})"));
     }
+    // Entrou mudo: para a captura e só então solta a faixa, que daqui em diante fica sempre
+    // ligada (veja `Call::set_mic`).
+    if !mic_open {
+        if let Err(err) = audio.stop_recording() {
+            log::warn!("voz: a captura não parou ({err})");
+        }
+        mic.unmute();
+    }
     log::info!("voz: conectado");
-    Ok(Handle { room: Arc::new(room), mic, audio, events: Arc::new(Mutex::new(Some(events))) })
+    Ok(Handle { room: Arc::new(room), audio, mic_open, events: Arc::new(Mutex::new(Some(events))) })
 }
 
 /// Sem resposta do LiveKit em 20 s, desiste em vez de ficar conectando para sempre.
