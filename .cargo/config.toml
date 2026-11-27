@@ -1,0 +1,4 @@
+# O libwebrtc pré-compilado do LiveKit (app desktop) usa o runtime C estático (/MT). Sem isto,
+# o link no Windows falha com LNK2038 (MT_StaticRelease x MD_DynamicRelease).
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
