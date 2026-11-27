@@ -53,7 +53,7 @@ Instalador do Windows (NSIS, por usuário, sem pedir administrador), com o
 
 ```powershell
 cargo install cargo-packager --locked
-cargo packager --release -p call-desktop   # gera dist\...-setup.exe
+cargo packager --release -p call-desktop   # gera o ...-setup.exe no target, em release\
 ```
 
 Teste: `scripts\teste-instalador.ps1`. Uma release sai ao enviar uma tag `vX.Y.Z` igual à versão do

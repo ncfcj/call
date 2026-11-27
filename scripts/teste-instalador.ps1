@@ -5,7 +5,7 @@
 #
 # Precisa do cargo-packager (`cargo install cargo-packager --locked`). Gera o instalador,
 # abre-o e pergunta o que você viu. O ideal é instalar também numa máquina (ou conta do
-# Windows) que nunca rodou o projeto: o instalador fica em dist\.
+# Windows) que nunca rodou o projeto: o script mostra onde ficou o instalador.
 
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\comum.ps1"
@@ -18,7 +18,8 @@ try {
     Write-Host "Gerando o instalador (build de release; a primeira vez demora)..."
     cargo packager --release -p call-desktop
     if ($LASTEXITCODE -ne 0) { throw "o instalador não foi gerado" }
-    $setup = Get-ChildItem dist -Recurse -Filter "*-setup.exe" | Sort-Object LastWriteTime | Select-Object -Last 1
+    $target = (cargo metadata -q --format-version 1 --no-deps | ConvertFrom-Json).target_directory
+    $setup = Get-ChildItem "$target\release" -Filter "*-setup.exe" | Sort-Object LastWriteTime | Select-Object -Last 1
 } finally {
     Pop-Location
 }

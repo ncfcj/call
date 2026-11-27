@@ -33,7 +33,8 @@ workspace = true
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
 
-# Instalador (cargo packager --release, em desktop/): NSIS, por usuário, sem pedir administrador.
+# Instalador (cargo packager --release -p call-desktop): NSIS, por usuário, sem pedir
+# administrador. Sai no target, em release\.
 [package.metadata.packager]
 product-name = "Call"
 identifier = "app.call.desktop"
@@ -43,9 +44,8 @@ before-packaging-command = "cargo build --release -p call-desktop"
 binaries = [{ path = "call-desktop", main = true }]
 icons = ["assets/icon.ico", "assets/icon-256.png"]
 formats = ["nsis"]
-out-dir = "../dist"
 
 [package.metadata.packager.nsis]
-install-mode = "currentUser"
+installer-mode = "currentUser"
 installer-icon = "assets/icon.ico"
 languages = ["PortugueseBR"]
