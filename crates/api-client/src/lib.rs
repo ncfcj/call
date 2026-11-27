@@ -46,6 +46,9 @@ pub struct ApiClient {
     base_url: String,
     http: reqwest::Client,
     token: Arc<Mutex<Option<String>>>,
+    /// Um refresh por vez: dois com o mesmo cookie fazem o servidor recusar o segundo, e a sessão
+    /// cairia sem motivo quando o access token vence com vários pedidos no ar.
+    refreshing: Arc<futures::lock::Mutex<()>>,
     #[cfg(not(target_arch = "wasm32"))]
     cookies: Arc<reqwest::cookie::Jar>,
 }
@@ -54,7 +57,12 @@ impl ApiClient {
     #[cfg(target_arch = "wasm32")]
     pub fn new(base_url: impl Into<String>) -> Self {
         let base_url = base_url.into().trim_end_matches('/').to_owned();
-        Self { base_url, http: reqwest::Client::new(), token: Arc::default() }
+        Self {
+            base_url,
+            http: reqwest::Client::new(),
+            token: Arc::default(),
+            refreshing: Arc::default(),
+        }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -65,7 +73,7 @@ impl ApiClient {
             .cookie_provider(cookies.clone())
             .build()
             .expect("cliente HTTP com a configuração padrão");
-        Self { base_url, http, token: Arc::default(), cookies }
+        Self { base_url, http, token: Arc::default(), refreshing: Arc::default(), cookies }
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -142,9 +150,14 @@ impl ApiClient {
         path: &str,
         body: Option<&(impl Serialize + ?Sized)>,
     ) -> ApiResult<reqwest::Response> {
+        let used = self.token();
         match self.send_once(method.clone(), path, body).await {
-            Err(err) if err.is_unauthorized() && self.token().is_some() => {
-                self.refresh().await?;
+            Err(err) if err.is_unauthorized() && used.is_some() => {
+                let _one_at_a_time = self.refreshing.lock().await;
+                // Outro pedido já renovou enquanto este esperava: só repete com o token novo.
+                if self.token() == used {
+                    self.refresh().await?;
+                }
                 self.send_once(method, path, body).await
             }
             other => other,

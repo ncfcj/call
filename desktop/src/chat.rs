@@ -30,6 +30,7 @@ use proto::{
 use crate::{
     gateway,
     ptt::{self, Ptt},
+    settings::{self, Settings},
     theme,
     voice::{self, Call, Device},
 };
@@ -155,6 +156,9 @@ const NOTICE_TTL: Duration = Duration::from_secs(6);
 
 impl Chat {
     pub fn new(api: ApiClient, me: User) -> (Self, Task<Msg>) {
+        let saved = settings::load();
+        // A tecla salva é registrada de novo; se outro programa a pegou, fica sem PTT.
+        let ptt = saved.ptt.as_deref().and_then(|key| Ptt::new(key.parse().ok()?).ok());
         let chat = Self {
             me,
             api,
@@ -180,10 +184,10 @@ impl Chat {
             call: None,
             voice_session: 0,
             controls: VoiceControls::default(),
-            prefs: voice::Prefs::default(),
+            prefs: saved.prefs,
             audio_dialog: None,
             voice_states: HashMap::new(),
-            ptt: None,
+            ptt,
             capturing_key: false,
         };
         let task = chat.call(|api| async move { api.my_guilds().await }, Msg::Guilds);
@@ -443,10 +447,12 @@ impl Chat {
             Msg::Input(device) => {
                 self.prefs.input = Some(device.id).filter(|id| !id.is_empty());
                 self.apply_devices();
+                self.save_settings();
             }
             Msg::Output(device) => {
                 self.prefs.output = Some(device.id).filter(|id| !id.is_empty());
                 self.apply_devices();
+                self.save_settings();
             }
             Msg::PttCapture => self.capturing_key = true,
             Msg::PttKey(event) => {
@@ -460,12 +466,14 @@ impl Chat {
                             Err(err) => self.notify(format!("Push-to-Talk: {err}.")),
                         }
                         self.apply_mic();
+                        self.save_settings();
                     }
                 }
             }
             Msg::PttOff => {
                 self.ptt = None;
                 self.apply_mic();
+                self.save_settings();
             }
             Msg::PttHeld(held) => {
                 if let Some(ptt) = &mut self.ptt {
@@ -533,6 +541,13 @@ impl Chat {
             call.set_mic(open);
             call.refresh(self.controls.deafened);
         }
+    }
+
+    fn save_settings(&self) {
+        settings::save(&Settings {
+            prefs: self.prefs.clone(),
+            ptt: self.ptt.as_ref().map(|p| p.label.clone()),
+        });
     }
 
     fn apply_devices(&self) {
@@ -1075,7 +1090,9 @@ impl Chat {
                 text("Saída").color(theme::MUTED),
                 pick_list(outputs, chosen(outputs, &self.prefs.output), Msg::Output)
                     .width(Length::Fill),
-                text("Vale na hora, inclusive durante uma chamada.").size(12).color(theme::MUTED),
+                text("Vale na hora, inclusive durante uma chamada, e fica guardado.")
+                    .size(12)
+                    .color(theme::MUTED),
                 text("Apertar para falar").color(theme::MUTED),
                 row![
                     text(match &self.ptt {

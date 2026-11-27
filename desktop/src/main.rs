@@ -7,6 +7,7 @@ mod chat;
 mod gateway;
 mod ptt;
 mod session;
+mod settings;
 mod theme;
 mod update;
 mod voice;
@@ -93,7 +94,8 @@ impl Auth {
 
 enum Screen {
     /// Conferindo se a sessão salva ainda vale. O Render free pode levar um minuto para acordar.
-    Booting,
+    /// Com o erro da última tentativa, se a rede falhou.
+    Booting(Option<String>),
     Auth(Auth),
     Home(Box<Chat>),
 }
@@ -102,6 +104,8 @@ enum Screen {
 enum Message {
     /// Fim do refresh da abertura: sem usuário, vai para o login, com o erro se houver.
     Booted(Option<User>, Option<String>),
+    /// Tenta de novo abrir a sessão salva, depois de uma falha de rede.
+    Restore,
     Mode(Mode),
     Username(String),
     DisplayName(String),
@@ -140,30 +144,43 @@ fn boot() -> (State, Task<Message>) {
     let task = match &saved {
         Some(cookie) => {
             api.restore_refresh_cookie(cookie);
-            let api = api.clone();
-            Task::perform(
-                async move {
-                    match api.refresh().await {
-                        Ok(user) => (Some(user), None),
-                        // Sessão vencida ou revogada: volta para o login, sem alarde.
-                        Err(err) if err.is_unauthorized() => (None, None),
-                        Err(err) => (None, Some(err.to_string())),
-                    }
-                },
-                |(user, error)| Message::Booted(user, error),
-            )
+            restore(&api)
         }
         None => Task::done(Message::Booted(None, None)),
     };
     let check =
         Task::perform(update::check(), |found| Message::UpdateFound(found.map(Box::new), true));
     let state =
-        State { api, screen: Screen::Booting, epoch: 0, saved, update: None, updating: None };
+        State { api, screen: Screen::Booting(None), epoch: 0, saved, update: None, updating: None };
     (state, Task::batch([task, check]))
 }
 
+/// Troca o cookie salvo por uma sessão aberta.
+fn restore(api: &ApiClient) -> Task<Message> {
+    let api = api.clone();
+    Task::perform(
+        async move {
+            match api.refresh().await {
+                Ok(user) => (Some(user), None),
+                // Sessão vencida ou revogada: volta para o login, sem alarde.
+                Err(err) if err.is_unauthorized() => (None, None),
+                Err(err) => (None, Some(err.to_string())),
+            }
+        },
+        |(user, error)| Message::Booted(user, error),
+    )
+}
+
+/// Sem rede na abertura, a sessão salva continua valendo: espera e tenta de novo.
+const RESTORE_RETRY: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn update(state: &mut State, message: Message) -> Task<Message> {
     match message {
+        Message::Booted(None, Some(error)) if state.saved.is_some() => {
+            state.screen = Screen::Booting(Some(error));
+            return Task::perform(tokio::time::sleep(RESTORE_RETRY), |()| Message::Restore);
+        }
+        Message::Restore => return restore(&state.api),
         Message::Booted(user, error) => {
             sync_session(state);
             return match user {
@@ -330,9 +347,13 @@ fn authed(result: Result<User, ApiError>) -> Message {
 
 fn view(state: &State) -> Element<'_, Message> {
     let content = match &state.screen {
-        Screen::Booting => container(text("Conectando ao servidor...").color(theme::MUTED))
-            .center(Length::Fill)
-            .into(),
+        Screen::Booting(error) => {
+            let label = match error {
+                Some(err) => format!("Sem conexão com o servidor ({err}). Tentando de novo..."),
+                None => "Conectando ao servidor...".to_owned(),
+            };
+            container(text(label).color(theme::MUTED)).center(Length::Fill).into()
+        }
         Screen::Auth(auth) => container(auth_view(auth)).center(Length::Fill).into(),
         Screen::Home(chat) => {
             let epoch = state.epoch;

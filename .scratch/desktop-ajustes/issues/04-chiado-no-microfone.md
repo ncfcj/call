@@ -55,3 +55,12 @@ WebRTC), que o PTT faz a cada aperto. Próximo teste: sem PTT, clicar em "Mudo" 
 Confirmado: sem PTT, mutar e desmutar pelo botão também deixa chiando. Correção: o microfone abre
 e fecha parando e retomando a captura (`PlatformAudio::stop_recording`/`start_recording`), sem
 mutar a faixa depois de publicada. Falta o teste numa chamada real.
+
+## Depois da correção (2026-11-27)
+
+O chiado contínuo sumiu; sobra um chiado curto logo depois de desmutar ou apertar o PTT, e para.
+Provável: a supressão de ruído e o ganho automático do WebRTC recomeçam do zero a cada vez que a
+captura volta e levam um instante para se ajustar. Para evitar, a captura teria de ficar sempre
+ligada e o silêncio ser feito no envio (`RtpSender::set_track`), mas o livekit 0.12.1 (a versão
+mais nova) deixa o transceiver da faixa `pub(crate)`. Caminhos: um `[patch]` local do SDK
+expondo o sender, ou capturar o microfone por conta própria num `NativeAudioSource`.

@@ -53,7 +53,7 @@ impl fmt::Display for Device {
 }
 
 /// Microfone e saída escolhidos (`None` = padrão do sistema).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Prefs {
     pub input: Option<String>,
     pub output: Option<String>,
