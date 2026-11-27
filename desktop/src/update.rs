@@ -10,14 +10,14 @@ use cargo_packager_updater::{
 };
 
 /// Chave pública das releases, gerada por `cargo packager signer generate`. A chave privada
-/// fica só nos segredos do GitHub Actions. Vazia, o app não procura atualização.
-const PUBKEY: &str = "";
+/// fica só nos segredos do GitHub Actions. É o arquivo `.pub` inteiro, em base64.
+const PUBKEY: &str = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEIxMjQ5RTlFNjg3OTBEMUIKUldRYkRYbG9ucDRrc1lzRllrekdmM0lHN3VoaUxUL3dDOHJVZVdZbURXYXNRWWtCeTh4UVdHT1oK";
 const ENDPOINT: &str = "https://github.com/ncfcj/call/releases/latest/download/latest.json";
 
 /// A release nova, se houver. Sem rede ou sem release, `None` (só fica no log).
 pub async fn check() -> Option<Update> {
     // O build de desenvolvimento (`cargo run`) não se atualiza.
-    if cfg!(debug_assertions) || PUBKEY.is_empty() {
+    if cfg!(debug_assertions) {
         return None;
     }
     tokio::task::spawn_blocking(|| {
