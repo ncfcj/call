@@ -4,8 +4,11 @@
 //! O access token fica só na memória. O refresh token fica no cookie `HttpOnly` que o servidor
 //! define, e o JavaScript nunca o lê: por isso toda chamada vai com `credentials: include`.
 //! Quando a API responde 401, o cliente tenta um refresh e repete a chamada uma vez.
+//!
+//! Fora do navegador (o app desktop), o próprio cliente guarda os cookies, e
+//! [`ApiClient::refresh_cookie`] e [`ApiClient::restore_refresh_cookie`] levam o de refresh
+//! para fora e de volta, para a sessão sobreviver a fechar o app.
 
-#[cfg(target_arch = "wasm32")]
 pub mod ws;
 
 use std::sync::{Arc, Mutex};
@@ -43,12 +46,57 @@ pub struct ApiClient {
     base_url: String,
     http: reqwest::Client,
     token: Arc<Mutex<Option<String>>>,
+    /// Um refresh por vez: dois com o mesmo cookie fazem o servidor recusar o segundo, e a sessão
+    /// cairia sem motivo quando o access token vence com vários pedidos no ar.
+    refreshing: Arc<futures::lock::Mutex<()>>,
+    #[cfg(not(target_arch = "wasm32"))]
+    cookies: Arc<reqwest::cookie::Jar>,
 }
 
 impl ApiClient {
+    #[cfg(target_arch = "wasm32")]
     pub fn new(base_url: impl Into<String>) -> Self {
         let base_url = base_url.into().trim_end_matches('/').to_owned();
-        Self { base_url, http: reqwest::Client::new(), token: Arc::default() }
+        Self {
+            base_url,
+            http: reqwest::Client::new(),
+            token: Arc::default(),
+            refreshing: Arc::default(),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(base_url: impl Into<String>) -> Self {
+        let base_url = base_url.into().trim_end_matches('/').to_owned();
+        let cookies = Arc::new(reqwest::cookie::Jar::default());
+        let http = reqwest::Client::builder()
+            .cookie_provider(cookies.clone())
+            .build()
+            .expect("cliente HTTP com a configuração padrão");
+        Self { base_url, http, token: Arc::default(), refreshing: Arc::default(), cookies }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn auth_url(&self) -> Option<reqwest::Url> {
+        format!("{}/auth/refresh", self.base_url).parse().ok()
+    }
+
+    /// O cookie de refresh atual (`refresh_token=...`), para guardar fora do app. `None` sem
+    /// sessão: o logout e um refresh recusado o apagam.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn refresh_cookie(&self) -> Option<String> {
+        use reqwest::cookie::CookieStore;
+        let value = self.cookies.cookies(&self.auth_url()?)?;
+        value.to_str().ok().map(str::to_owned)
+    }
+
+    /// Devolve ao cliente um cookie lido de [`Self::refresh_cookie`]; depois, chame
+    /// [`Self::refresh`].
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn restore_refresh_cookie(&self, cookie: &str) {
+        if let Some(url) = self.auth_url() {
+            self.cookies.add_cookie_str(&format!("{cookie}; Path=/auth"), &url);
+        }
     }
 
     pub fn base_url(&self) -> &str {
@@ -102,9 +150,14 @@ impl ApiClient {
         path: &str,
         body: Option<&(impl Serialize + ?Sized)>,
     ) -> ApiResult<reqwest::Response> {
+        let used = self.token();
         match self.send_once(method.clone(), path, body).await {
-            Err(err) if err.is_unauthorized() && self.token().is_some() => {
-                self.refresh().await?;
+            Err(err) if err.is_unauthorized() && used.is_some() => {
+                let _one_at_a_time = self.refreshing.lock().await;
+                // Outro pedido já renovou enquanto este esperava: só repete com o token novo.
+                if self.token() == used {
+                    self.refresh().await?;
+                }
                 self.send_once(method, path, body).await
             }
             other => other,

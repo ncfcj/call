@@ -6,5 +6,7 @@ exclude_globs = [
     "crates/voice/src/room.rs",
     "crates/api-client/src/ws.rs",
     "web/**",
+    # A UI do app desktop é testada à mão em cada etapa (scripts/teste-desktop.ps1).
+    "desktop/**",
     "server/src/main.rs",
 ]

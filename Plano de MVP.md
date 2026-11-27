@@ -257,16 +257,16 @@ Objetivo: o app principal do Call, nativo, sem WebView, com consumo mínimo de C
 
 Stack:
 
-- **UI:** `iced` (MIT, arquitetura Elm, redesenha só quando o estado muda, GPU via `wgpu` com fallback em software). Visual do `DESIGN.md`.
+- **UI:** `iced` (MIT, arquitetura Elm, redesenha só quando o estado muda, GPU via `wgpu` com fallback em software). Mesmo visual da web; o visual muda só depois do MVP, e a Fase 4 foca na funcionalidade.
 - **Voz:** crate `livekit` (SDK Rust), que traz o libwebrtc nativo com o processamento de áudio dele (eco, ruído, ganho) e o Opus.
 - **Reaproveitado:** `proto`, `api-client` (precisa de transporte nativo para o WebSocket) e `core` (estado e regras, sem UI).
 - **Sessão:** o refresh token continua no cookie, guardado pelo próprio client (cookie jar do `reqwest`) e salvo no Cofre de Credenciais do Windows, não em arquivo.
 
 Etapas (um commit e um teste funcional por etapa):
 
-- [ ] **4a. Esqueleto e login.** Janela iced, cadastro e login na API de produção ou local, sessão que sobrevive a fechar e abrir o app. Teste: abrir o app, entrar, fechar, abrir de novo e continuar logado
-- [ ] **4b. Servidores, canais e chat.** Lista de servidores e canais, histórico com rolagem, envio, digitando e presença pelo WebSocket, com reconexão. Teste: conversar entre o app e um navegador na web
-- [ ] **4c. Voz.** Entrar e sair do canal de voz, mudo, ensurdecer, quem está falando e escolha de microfone e saída. Teste: chamada entre o app e a web, em redes diferentes
+- [x] **4a. Esqueleto e login.** Janela iced, cadastro e login na API de produção ou local, sessão que sobrevive a fechar e abrir o app. Teste: abrir o app, entrar, fechar, abrir de novo e continuar logado
+- [x] **4b. Servidores, canais e chat.** Lista de servidores e canais, histórico com rolagem, envio, digitando e presença pelo WebSocket, com reconexão. Teste: conversar entre o app e um navegador na web
+- [x] **4c. Voz.** Entrar e sair do canal de voz, mudo, ensurdecer, quem está falando e escolha de microfone e saída. Teste: chamada entre o app e a web, em redes diferentes
 - [ ] **4d. Instalador.** Instalador para Windows (MSI ou NSIS) com ícone e atalho. Teste: instalar numa máquina limpa, entrar e falar
 - [ ] **4e. Medição.** CPU, GPU e memória parado e numa chamada, comparados com a web no Chrome. Metas iniciais: perto de 0% de CPU parado e abaixo de 150 MB de memória numa chamada
 - [ ] **4f. Push-to-Talk.** Tecla configurável com atalho global (crate `global-hotkey`)

@@ -1,0 +1,53 @@
+[package]
+name = "call-desktop"
+description = "App desktop nativo do Call (iced), sem WebView."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+api-client.workspace = true
+proto.workspace = true
+call-core.workspace = true
+chrono = { workspace = true, features = ["clock"] }
+log = "0.4"
+# Atualização: confere a release nova, baixa o instalador, checa a assinatura (minisign) e o roda.
+cargo-packager-updater = "0.2"
+# O livekit liga o `ring` e o reqwest o `aws-lc-rs`; com os dois, o main escolhe um.
+rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs"] }
+tokio = { version = "1", features = ["macros", "rt", "time"] }
+iced = { version = "0.14", features = ["tokio"] }
+# Voz: o libwebrtc nativo, com o microfone e a saída pelo WASAPI e o processamento de áudio dele.
+livekit = { version = "0.12", features = ["rustls-tls-webpki-roots"] }
+# Push-to-Talk: tecla global, que funciona com o app em segundo plano.
+global-hotkey = "0.10"
+
+# A sessão fica no Cofre de Credenciais do Windows.
+[target.'cfg(windows)'.dependencies]
+keyring = "4"
+
+[lints]
+workspace = true
+
+# O ícone dentro do .exe (atalhos, barra de tarefas e Explorer).
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+
+# Instalador (cargo packager --release -p call-desktop): NSIS, por usuário, sem pedir
+# administrador. Sai no target, em release\.
+[package.metadata.packager]
+product-name = "Call"
+identifier = "app.call.desktop"
+publisher = "Call"
+description = "Chat de texto e voz"
+before-packaging-command = "cargo build --release -p call-desktop"
+binaries = [{ path = "call-desktop", main = true }]
+icons = ["assets/icon.ico", "assets/icon-256.png"]
+formats = ["nsis"]
+
+[package.metadata.packager.nsis]
+installer-mode = "currentUser"
+installer-icon = "assets/icon.ico"
+languages = ["PortugueseBR"]
