@@ -1,5 +1,5 @@
 //! Servidores, canais e chat: o mesmo estado e as mesmas ações do `web/src/store.rs`, com a
-//! mesma disposição da `web/src/views/chat.rs`. A voz chega na etapa 4c.
+//! mesma disposição da `web/src/views/chat.rs`. A voz fica no `voice.rs`.
 
 use std::{
     collections::{HashMap, HashSet},
@@ -9,7 +9,7 @@ use std::{
 
 use api_client::{ApiClient, ApiError};
 use call_core::{
-    ConnState, MessageLog, Typing,
+    ConnState, MessageLog, Typing, VoiceControls,
     ui::{initials, starts_group, typing_label},
 };
 use iced::{
@@ -17,17 +17,20 @@ use iced::{
     font::Weight,
     futures::channel::mpsc::UnboundedSender,
     widget::{
-        Column, button, center, checkbox, column, container, row, scrollable, text, text_input,
-        tooltip,
+        Column, button, center, checkbox, column, container, pick_list, row, scrollable, text,
+        text_input, tooltip,
     },
 };
 use proto::{
     Channel, ChannelId, ChannelKind, ClientEvent, CreateChannelRequest, ErrorCode, Guild, GuildId,
-    Member, Message, MessagesQuery, PresenceStatus, ServerEvent, User, UserId,
+    Member, Message, MessagesQuery, PresenceStatus, ServerEvent, User, UserId, VoiceState,
     message::{MESSAGES_PAGE_DEFAULT, MESSAGES_PAGE_MAX, validate_message_content},
 };
 
-use crate::{gateway, theme};
+use crate::{
+    gateway, theme,
+    voice::{self, Call, Device},
+};
 
 /// O `ApiError` não é `Clone`, e as mensagens do iced precisam ser.
 pub type Res<T> = Result<T, Arc<ApiError>>;
@@ -72,6 +75,18 @@ pub enum Msg {
     CreateChannel,
     CopyInvite(String),
     LeaveGuild,
+    JoinVoice(GuildId, ChannelId),
+    /// Resposta da entrada na chamada `session`.
+    VoiceJoined(u64, Result<voice::Handle, String>),
+    Voice(u64, voice::Event),
+    LeaveVoice,
+    ToggleMute,
+    ToggleDeaf,
+    AudioSettings(bool),
+    Input(Device),
+    Output(Device),
+    /// Uma tarefa sem resposta terminou (ex.: fechar a sala).
+    Done,
     /// Tratado pelo `main`, que é quem guarda a sessão.
     Logout,
 }
@@ -111,6 +126,16 @@ pub struct Chat {
     started: Instant,
     /// Um refresh foi recusado: o `main` volta para o login.
     pub expired: bool,
+    call: Option<Call>,
+    voice_session: u64,
+    /// Mute e deaf. Valem entre chamadas.
+    controls: VoiceControls,
+    prefs: voice::Prefs,
+    /// Microfones e saídas, com o diálogo de áudio aberto.
+    audio_dialog: Option<(Vec<Device>, Vec<Device>)>,
+    /// Quem está na voz em cada servidor, segundo o servidor. É o que mostra quem está num
+    /// canal para quem não está nele.
+    voice_states: HashMap<GuildId, HashMap<UserId, VoiceState>>,
 }
 
 /// O aviso de digitação vale 8 s nos outros clients; reenvia um pouco antes.
@@ -141,6 +166,12 @@ impl Chat {
             forms: Forms::default(),
             started: Instant::now(),
             expired: false,
+            call: None,
+            voice_session: 0,
+            controls: VoiceControls::default(),
+            prefs: voice::Prefs::default(),
+            audio_dialog: None,
+            voice_states: HashMap::new(),
         };
         let task = chat.call(|api| async move { api.my_guilds().await }, Msg::Guilds);
         (chat, task)
@@ -334,9 +365,134 @@ impl Chat {
                     );
                 }
             }
-            Msg::Logout => {}
+            Msg::JoinVoice(guild, channel) => return self.join_voice(guild, channel),
+            Msg::VoiceJoined(session, result) => {
+                let current = self.call.as_mut().filter(|c| c.session == session);
+                match (current, result) {
+                    (Some(call), Ok(handle)) => {
+                        call.connected(handle, self.controls.deafened);
+                        self.send_voice_state();
+                    }
+                    (Some(_), Err(err)) => {
+                        self.call = None;
+                        self.notify(format!("Não consegui entrar na voz: {err}"));
+                    }
+                    // Saiu (ou trocou de canal) enquanto conectava.
+                    (None, Ok(handle)) => return Task::perform(handle.close(), |()| Msg::Done),
+                    (None, Err(_)) => {}
+                }
+            }
+            Msg::Voice(session, event) => {
+                let Some(call) = self.call.as_mut().filter(|c| c.session == session) else {
+                    return Task::none();
+                };
+                match event {
+                    voice::Event::Changed => call.refresh(self.controls.deafened),
+                    voice::Event::Speakers(ids) => call.speaking = ids.into_iter().collect(),
+                    voice::Event::Reconnecting => call.status = voice::Status::Reconnecting,
+                    voice::Event::Reconnected => call.status = voice::Status::Connected,
+                    voice::Event::Disconnected => {
+                        let task = self.leave_voice();
+                        self.notify("Você saiu da chamada de voz: a conexão caiu.");
+                        return task;
+                    }
+                }
+            }
+            Msg::LeaveVoice => return self.leave_voice(),
+            Msg::ToggleMute => {
+                self.controls.toggle_mute();
+                self.apply_controls();
+            }
+            Msg::ToggleDeaf => {
+                self.controls.toggle_deaf();
+                self.apply_controls();
+            }
+            Msg::AudioSettings(open) => {
+                self.audio_dialog = None;
+                if open {
+                    // Fora da chamada, abre o áudio do sistema só para listar.
+                    let temp;
+                    let audio = match self.call.as_ref().and_then(Call::audio) {
+                        Some(audio) => Some(audio),
+                        None => {
+                            temp = livekit::PlatformAudio::new().ok();
+                            temp.as_ref()
+                        }
+                    };
+                    match audio {
+                        Some(audio) => self.audio_dialog = Some(voice::devices(audio)),
+                        None => self.notify("Não achei o áudio do sistema."),
+                    }
+                }
+            }
+            Msg::Input(device) => {
+                self.prefs.input = Some(device.id).filter(|id| !id.is_empty());
+                self.apply_devices();
+            }
+            Msg::Output(device) => {
+                self.prefs.output = Some(device.id).filter(|id| !id.is_empty());
+                self.apply_devices();
+            }
+            Msg::Done | Msg::Logout => {}
         }
         Task::none()
+    }
+
+    // --- Voz --------------------------------------------------------------------------------
+
+    fn join_voice(&mut self, guild: GuildId, channel: ChannelId) -> Task<Msg> {
+        if self.call.as_ref().is_some_and(|c| c.channel == channel) {
+            return Task::none();
+        }
+        let leave = self.leave_voice();
+        self.voice_session += 1;
+        let session = self.voice_session;
+        self.call = Some(Call::new(guild, channel, session));
+        let (api, mic_open, prefs) =
+            (self.api.clone(), self.controls.mic_open(), self.prefs.clone());
+        let join = Task::perform(voice::connect(api, channel, mic_open, prefs), move |res| {
+            Msg::VoiceJoined(session, res)
+        });
+        Task::batch([leave, join])
+    }
+
+    /// Sai da chamada, se estiver numa. Também chamado pelo `main` no logout.
+    pub fn leave_voice(&mut self) -> Task<Msg> {
+        let Some(call) = self.call.take() else { return Task::none() };
+        self.send_voice_state();
+        Task::perform(call.close(), |()| Msg::Done)
+    }
+
+    /// Avisa o servidor do canal de voz (só depois de conectado ao LiveKit) e do mute e deaf.
+    fn send_voice_state(&self) {
+        let channel_id =
+            self.call.as_ref().filter(|c| c.status != voice::Status::Connecting).map(|c| c.channel);
+        self.send_ws(ClientEvent::VoiceStateUpdate {
+            channel_id,
+            muted: self.controls.muted,
+            deafened: self.controls.deafened,
+        });
+    }
+
+    fn apply_controls(&mut self) {
+        self.send_voice_state();
+        if let Some(call) = &mut self.call {
+            call.set_mic(self.controls.mic_open());
+            call.refresh(self.controls.deafened);
+        }
+    }
+
+    fn apply_devices(&self) {
+        if let Some(audio) = self.call.as_ref().and_then(Call::audio) {
+            voice::select_devices(audio, &self.prefs);
+        }
+    }
+
+    pub fn voice_subscription(&self) -> iced::Subscription<Msg> {
+        match &self.call {
+            Some(call) => call.subscription().with(call.session).map(|(s, e)| Msg::Voice(s, e)),
+            None => iced::Subscription::none(),
+        }
     }
 
     // --- WebSocket --------------------------------------------------------------------------
@@ -370,6 +526,8 @@ impl Chat {
             self.send_ws(ClientEvent::Subscribe { guild_id: guild.id });
         }
         self.online.clear();
+        // Diz ao servidor onde está na voz (se ele reiniciou, é assim que fica sabendo).
+        self.send_voice_state();
         let catch_up = self.logs.keys().map(|&channel| self.catch_up(channel));
         // Quem entrou nos servidores enquanto a conexão estava caída.
         let members = self.members.keys().map(|&guild| self.load_members(guild));
@@ -379,8 +537,23 @@ impl Chat {
     fn apply(&mut self, event: ServerEvent) -> Task<Msg> {
         match event {
             ServerEvent::Hello { message_ttl_days, .. } => self.message_ttl_days = message_ttl_days,
-            ServerEvent::Subscribed { guild_id, online, .. } => {
+            ServerEvent::Subscribed { guild_id, online, voice } => {
                 self.online.insert(guild_id, online.into_iter().collect());
+                let tasks: Vec<_> =
+                    voice.iter().map(|state| self.ensure_member(guild_id, state.user_id)).collect();
+                self.voice_states
+                    .insert(guild_id, voice.into_iter().map(|s| (s.user_id, s)).collect());
+                return Task::batch(tasks);
+            }
+            ServerEvent::VoiceStateUpdate(state) => {
+                let guild = self.voice_states.entry(state.guild_id).or_default();
+                match state.channel_id {
+                    Some(_) => guild.insert(state.user_id, state),
+                    None => guild.remove(&state.user_id),
+                };
+                if state.channel_id.is_some() {
+                    return self.ensure_member(state.guild_id, state.user_id);
+                }
             }
             ServerEvent::PresenceUpdate { guild_id, user_id, status } => {
                 let set = self.online.entry(guild_id).or_default();
@@ -412,10 +585,8 @@ impl Chat {
             ServerEvent::TypingStart { channel_id, user_id, .. } => {
                 self.typing.start(channel_id, user_id, self.now_ms());
             }
-            // A voz chega na etapa 4c; o servidor recusar um evento não muda a tela.
-            ServerEvent::VoiceStateUpdate(_)
-            | ServerEvent::HeartbeatAck
-            | ServerEvent::Error { .. } => {}
+            // O servidor recusar um evento não muda a tela.
+            ServerEvent::HeartbeatAck | ServerEvent::Error { .. } => {}
         }
         Task::none()
     }
@@ -574,6 +745,8 @@ impl Chat {
     pub fn view(&self) -> Element<'_, Msg> {
         let content: Element<'_, Msg> = if self.forms.adding {
             center(self.add_guild_dialog()).into()
+        } else if let Some((inputs, outputs)) = &self.audio_dialog {
+            center(self.audio_settings(inputs, outputs)).into()
         } else if self.selected_guild.is_some() {
             row![self.message_pane(), self.member_list()].into()
         } else {
@@ -650,8 +823,33 @@ impl Chat {
             }
             side = side.push(heading("CANAIS DE VOZ"));
             for channel in channels.iter().filter(|c| c.kind == ChannelKind::Voice) {
-                // shortcut: canal de voz só listado; entrar nele é a etapa 4c.
-                side = side.push(text!("  {}", channel.name).color(theme::MUTED));
+                let here = self.call.as_ref().is_some_and(|c| c.channel == channel.id);
+                side = side.push(
+                    tooltip(
+                        button(text!("> {}", channel.name))
+                            .width(Length::Fill)
+                            .on_press(Msg::JoinVoice(guild.id, channel.id))
+                            .style(if here { button::secondary } else { button::text }),
+                        text(if here { "Você está nesta chamada" } else { "Entrar na chamada" })
+                            .size(12),
+                        tooltip::Position::Right,
+                    )
+                    .style(container::rounded_box),
+                );
+                for row in self.voice_rows(guild.id, channel.id) {
+                    let mut line = text!("    {}", row.name);
+                    if row.speaking {
+                        line = line.color(theme::ONLINE).font(bold());
+                    }
+                    let flag = if row.deafened {
+                        " (sem som)"
+                    } else if row.muted {
+                        " (mudo)"
+                    } else {
+                        ""
+                    };
+                    side = side.push(row![line, text(flag).size(12).color(theme::MUTED)]);
+                }
             }
             if guild.owner_id == self.me.id {
                 side = side.push(
@@ -689,12 +887,140 @@ impl Chat {
             button("Sair").on_press(Msg::Logout).style(button::text),
         ]
         .align_y(iced::Alignment::Center);
+        let controls = self.controls;
+        let toggle = |label, off: bool, msg| {
+            button(text(label).size(12)).padding([4, 8]).on_press(msg).style(if off {
+                button::danger
+            } else {
+                button::secondary
+            })
+        };
+        let buttons = row![
+            toggle(
+                if controls.mic_shown_muted() { "Mudo" } else { "Microfone" },
+                controls.mic_shown_muted(),
+                Msg::ToggleMute,
+            ),
+            toggle(
+                if controls.deafened { "Sem som" } else { "Som" },
+                controls.deafened,
+                Msg::ToggleDeaf
+            ),
+            toggle("Áudio", false, Msg::AudioSettings(true)),
+        ]
+        .spacing(6);
+        let mut bottom = Column::new().spacing(8);
+        if let Some(call) = &self.call {
+            bottom = bottom.push(self.voice_panel(call));
+        }
+        bottom = bottom.push(user).push(buttons);
         column![
             scrollable(side).height(Length::Fill),
-            container(user).padding(12).style(|_| panel(theme::SURFACE_DARK)),
+            container(bottom).padding(12).style(|_| panel(theme::SURFACE_DARK)),
         ]
         .width(240)
         .height(Length::Fill)
+        .into()
+    }
+
+    /// Quem está num canal de voz: na chamada, a sala do LiveKit (com quem está falando); fora
+    /// dela, o que o servidor sabe.
+    fn voice_rows(&self, guild: GuildId, channel: ChannelId) -> Vec<VoiceRow> {
+        let flags = |user: &str| {
+            let user = user.parse().ok().map(UserId)?;
+            self.voice_states.get(&guild)?.get(&user).map(|s| (s.muted, s.deafened))
+        };
+        if let Some(call) = self.call.as_ref().filter(|c| c.channel == channel) {
+            return call
+                .participants
+                .iter()
+                .map(|p| {
+                    let (muted, deafened) = if p.local {
+                        (!self.controls.mic_open(), self.controls.deafened)
+                    } else {
+                        let (m, d) = flags(&p.identity).unwrap_or((false, false));
+                        (m || !p.mic, d)
+                    };
+                    VoiceRow {
+                        name: p.name.clone(),
+                        speaking: call.speaking.contains(&p.identity),
+                        muted,
+                        deafened,
+                    }
+                })
+                .collect();
+        }
+        let mut rows: Vec<VoiceRow> = self
+            .voice_states
+            .get(&guild)
+            .map(|states| {
+                states
+                    .values()
+                    .filter(|s| s.channel_id == Some(channel))
+                    .map(|s| VoiceRow {
+                        name: self.display_name(guild, s.user_id),
+                        speaking: false,
+                        muted: s.muted,
+                        deafened: s.deafened,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        rows.sort_by(|a, b| a.name.cmp(&b.name));
+        rows
+    }
+
+    /// Acima do usuário, durante uma chamada: o estado da conexão e o botão de sair.
+    fn voice_panel(&self, call: &Call) -> Element<'_, Msg> {
+        let (label, color) = match call.status {
+            voice::Status::Connecting => ("Conectando à voz...", theme::MUTED),
+            voice::Status::Connected => ("Voz conectada", theme::ONLINE),
+            voice::Status::Reconnecting => ("Voz reconectando...", theme::DANGER),
+        };
+        let name = self
+            .channels
+            .get(&call.guild)
+            .and_then(|list| list.iter().find(|c| c.id == call.channel))
+            .map(|c| c.name.as_str())
+            .unwrap_or_default();
+        row![
+            column![text(label).size(12).color(color).font(bold()), text(name).size(12)]
+                .width(Length::Fill),
+            button(text("Sair da voz").size(12))
+                .padding([4, 8])
+                .on_press(Msg::LeaveVoice)
+                .style(button::danger),
+        ]
+        .align_y(iced::Alignment::Center)
+        .into()
+    }
+
+    fn audio_settings<'a>(
+        &'a self,
+        inputs: &'a [Device],
+        outputs: &'a [Device],
+    ) -> Element<'a, Msg> {
+        let chosen = |list: &'a [Device], id: &Option<String>| {
+            let id = id.as_deref().unwrap_or("");
+            list.iter().find(|d| d.id == id).or(list.first()).cloned()
+        };
+        container(
+            column![
+                text("Áudio").size(20).font(bold()),
+                text("Microfone").color(theme::MUTED),
+                pick_list(inputs, chosen(inputs, &self.prefs.input), Msg::Input)
+                    .width(Length::Fill),
+                text("Saída").color(theme::MUTED),
+                pick_list(outputs, chosen(outputs, &self.prefs.output), Msg::Output)
+                    .width(Length::Fill),
+                text("Vale na hora, inclusive durante uma chamada.").size(12).color(theme::MUTED),
+                button("Fechar").on_press(Msg::AudioSettings(false)),
+            ]
+            .spacing(8),
+        )
+        .padding(20)
+        .width(420)
+        .style(|_| card_style())
         .into()
     }
 
@@ -825,6 +1151,14 @@ impl Chat {
             .style(|_| panel(theme::SURFACE_CARD))
             .into()
     }
+}
+
+/// Uma pessoa na lista de um canal de voz.
+struct VoiceRow {
+    name: String,
+    speaking: bool,
+    muted: bool,
+    deafened: bool,
 }
 
 fn bold() -> Font {

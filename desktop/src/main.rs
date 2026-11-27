@@ -7,6 +7,7 @@ mod chat;
 mod gateway;
 mod session;
 mod theme;
+mod voice;
 
 use api_client::{ApiClient, ApiError};
 use chat::Chat;
@@ -139,9 +140,11 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             // volta na próxima abertura.
             session::save(state.api.base_url(), None);
             state.saved = None;
+            let hang_up = leave_voice(state);
             state.screen = Screen::Auth(Auth::new(None));
             let api = state.api.clone();
-            return Task::perform(async move { api.logout().await }, |_| Message::LoggedOut);
+            let logout = Task::perform(async move { api.logout().await }, |_| Message::LoggedOut);
+            return Task::batch([hang_up, logout]);
         }
         Message::LoggedOut => sync_session(state),
         Message::Chat(epoch, msg) => {
@@ -149,13 +152,14 @@ fn update(state: &mut State, message: Message) -> Task<Message> {
             if epoch != state.epoch {
                 return Task::none();
             }
-            let task = chat.update(msg);
+            let mut task = chat.update(msg).map(move |msg| Message::Chat(epoch, msg));
             if chat.expired {
+                task = Task::batch([task, leave_voice(state)]);
                 state.screen =
                     Screen::Auth(Auth::new(Some("Sua sessão expirou. Entre de novo.".into())));
             }
             sync_session(state);
-            return task.map(move |msg| Message::Chat(epoch, msg));
+            return task;
         }
         other => {
             if let Screen::Auth(auth) = &mut state.screen {
@@ -175,13 +179,18 @@ fn start_chat(state: &mut State, user: User) -> Task<Message> {
     task.map(move |msg| Message::Chat(epoch, msg))
 }
 
-/// O WebSocket e o relógio do chat, só com a sessão aberta.
+/// Fecha a chamada antes de sair da tela do chat. A resposta chega depois e é descartada.
+fn leave_voice(state: &mut State) -> Task<Message> {
+    let Screen::Home(chat) = &mut state.screen else { return Task::none() };
+    chat.leave_voice().discard()
+}
+
+/// O WebSocket, a voz e o relógio do chat, só com a sessão aberta.
 fn subscription(state: &State) -> Subscription<Message> {
-    if !matches!(state.screen, Screen::Home(_)) {
-        return Subscription::none();
-    }
+    let Screen::Home(chat) = &state.screen else { return Subscription::none() };
     Subscription::batch([
         gateway::subscription(&state.api, state.epoch).map(chat::Msg::Gateway),
+        chat.voice_subscription(),
         iced::time::every(std::time::Duration::from_secs(1)).map(|_| chat::Msg::Tick),
     ])
     .with(state.epoch)

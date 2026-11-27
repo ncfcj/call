@@ -14,6 +14,8 @@ call-core.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 tokio = { version = "1", features = ["macros", "time"] }
 iced = { version = "0.14", features = ["tokio"] }
+# Voz: o libwebrtc nativo, com o microfone e a saída pelo WASAPI e o processamento de áudio dele.
+livekit = { version = "0.12", features = ["rustls-tls-webpki-roots"] }
 
 # A sessão fica no Cofre de Credenciais do Windows.
 [target.'cfg(windows)'.dependencies]
